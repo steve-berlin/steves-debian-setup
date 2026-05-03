@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Alacritty
+Comment=Alacritty Service
+Exec=/usr/bin/nohup /usr/bin/alacritty --gapplication-service &
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

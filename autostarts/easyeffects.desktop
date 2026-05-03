@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=EasyEffects
+Comment=EasyEffects Service
+Exec=/usr/bin/nohup /usr/bin/easyeffects --gapplication-service &
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

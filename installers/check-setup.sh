@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Verify install-deps.sh ran successfully. Exit 0 if all OK, 1 if any FAIL.
+set -u
+P=0; F=0
+ok()  { printf '\033[1;32m[OK]\033[0m   %s\n' "$*"; P=$((P+1)); }
+bad() { printf '\033[1;31m[FAIL]\033[0m %s\n' "$*"; F=$((F+1)); }
+have(){ command -v "$1" >/dev/null 2>&1; }
+pkg() { dpkg -s "$1" >/dev/null 2>&1; }
+cf()  { [ -e "$1" ] && ok "file $1" || bad "file $1 missing"; }
+cd_() { [ -d "$1" ] && ok "dir  $1" || bad "dir  $1 missing"; }
+cp_() { pkg "$1"    && ok "pkg  $1" || bad "pkg  $1 not installed"; }
+np()  { pkg "$1"    && bad "pkg  $1 still installed" || ok "pkg  $1 removed"; }
+cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
+
+# 1. apt packages
+for p in zsh git curl fzf tmux tlp gamemode copyq flameshot mpv playerctl \
+         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl; do cp_ "$p"; done
+
+# 2. oh-my-zsh + plugins
+cd_ "$HOME/.oh-my-zsh"
+cd_ "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+cd_ "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+
+# 3. fzf integration
+cf "$HOME/.fzf.zsh"
+
+# 4. user toolchains
+cf "$HOME/.cargo/env"
+cd_ "$HOME/.rbenv"
+{ have atuin || [ -x "$HOME/.atuin/bin/atuin" ]; } && ok "atuin"    || bad "atuin missing"
+have starship                                      && ok "starship" || bad "starship missing"
+cf "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+cf "$HOME/.deno/bin/deno"
+cf "$HOME/.bun/bin/bun"
+cd_ "$HOME/.pyenv"
+
+# 5. go + neovim tarball
+cf "$HOME/.local/go/bin/go"
+cf "$HOME/.nvim/bin/nvim"
+
+# 6. third-party apps
+have brave-browser && ok "brave"    || bad "brave missing"
+have waydroid      && ok "waydroid" || bad "waydroid missing"
+
+# 7. LazyVim + app repos
+cd_ "$HOME/.config/nvim"
+cd_ "$HOME/wallChange"
+cd_ "$HOME/clockApp"
+
+# 8. pip tools
+for p in yt-dlp tldr platformio; do cbin "$p"; done
+
+# 9. flatpak + Organic Maps
+have flatpak && flatpak info --user app.organicmaps.desktop >/dev/null 2>&1 \
+  && ok "flatpak Organic Maps" || bad "flatpak Organic Maps missing"
+
+# 10. Claude Code + NordVPN
+{ have claude || [ -x "$HOME/.local/bin/claude" ]; } && ok "claude" || bad "claude missing"
+have nordvpn && ok "nordvpn" || bad "nordvpn missing"
+getent group nordvpn 2>/dev/null | grep -q "\b$USER\b" \
+  && ok "user in nordvpn group" || bad "user NOT in nordvpn group"
+
+# 11. tmux prefix
+grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$HOME/.tmux.conf" 2>/dev/null \
+  && ok "tmux prefix = C-a" || bad "tmux prefix not set to C-a"
+
+# 12. helper scripts
+for f in "$HOME/.local/bin/clear-clipboard" "$HOME/.local/bin/focus-nth"; do
+  [ -x "$f" ] && ok "exec $f" || bad "exec $f missing/not-executable"
+done
+
+# 13. XFCE keybindings
+if have xfconf-query; then
+  xk() {
+    local got; got=$(xfconf-query -c xfce4-keyboard-shortcuts -p "$1" 2>/dev/null || true)
+    [ "$got" = "$2" ] && ok "xfce $1" || bad "xfce $1 = '$got' (want '$2')"
+  }
+  xk '/xfwm4/custom/<Super>Page_Up'   'maximize_window_key'
+  xk '/xfwm4/custom/<Super>Page_Down' 'hide_window_key'
+  xk '/commands/custom/<Super>k'      'systemctl poweroff'
+  xk '/commands/custom/<Super>l'      'xfce4-session-logout --logout'
+  xk '/commands/custom/<Super>c'      "$HOME/.local/bin/clear-clipboard"
+  xk '/commands/custom/Print'         'flameshot gui'
+  for i in 1 2 3 4 5 6 7 8 9; do
+    xk "/commands/custom/<Super>$i" "$HOME/.local/bin/focus-nth $i"
+  done
+else
+  bad "xfconf-query missing — can't verify keybindings"
+fi
+
+# 14. debloat — should be GONE
+for p in gimp mx-packageinstaller lo-main-helper strawberry gmtp deb-installer vlc \
+         xserver-xorg-video-nouveau; do np "$p"; done
+dpkg -l 'nvidia-*' 2>/dev/null | grep -q '^ii' \
+  && bad "nvidia-* packages still installed" || ok "no nvidia-* packages"
+
+# 15. nouveau blacklist + active GPU
+cf /etc/modprobe.d/blacklist-nouveau.conf
+lsmod | grep -qE '^(nvidia|nouveau)' \
+  && bad "nvidia/nouveau kernel module loaded (reboot pending?)" \
+  || ok "nvidia/nouveau not in kernel"
+if have glxinfo; then
+  r=$(glxinfo 2>/dev/null | awk -F': ' '/OpenGL renderer/ {print $2; exit}')
+  case "$r" in
+    *NVIDIA*|*nouveau*) bad "renderer: $r (not iGPU)" ;;
+    '')                 bad "no OpenGL renderer (no X session?)" ;;
+    *)                  ok "renderer: $r" ;;
+  esac
+else
+  printf '[--]   glxinfo missing — skipping renderer check (apt install mesa-utils)\n'
+fi
+
+echo
+printf 'Passed: %d  Failed: %d\n' "$P" "$F"
+[ "$F" -eq 0 ]

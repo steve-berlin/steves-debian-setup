@@ -1,0 +1,25 @@
+# Editor / OS noise
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Backups created by sed -i.bak and friends
+*.bak
+*.bak.*
+
+# Runtime artifacts that installers create elsewhere; guard against
+# accidentally committing if someone runs the installers from inside the repo
+venv/
+__pycache__/
+*.pyc
+node_modules/
+
+# Roblox-specific runtime state (created under ~/install_roblox/, not here,
+# but ignore in case anyone copies them in)
+roblox.apk
+waydroid_script/
+
+# Local CLAUDE.md overrides per-machine
+CLAUDE.local.md
+.claude/

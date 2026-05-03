@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# rbx — launch Roblox in Waydroid with T480 performance tweaks.
+# Mirrors the pattern of ~/.local/bin/stm and the `skl` alias in ~/.zshrc:
+# stop TLP, drop swappiness, pin governor to performance, then launch.
+set -e
+
+PKG=${RBX_PKG:-com.roblox.client}
+
+# 1. system container (started once, stays up until reboot)
+if ! systemctl is-active --quiet waydroid-container; then
+  sudo systemctl start waydroid-container
+fi
+
+# 2. perf profile — identical to stm/skl
+sudo systemctl stop tlp
+sudo sysctl vm.swappiness=10
+sudo cpupower frequency-set -g performance
+
+# 3. user-side session.
+#
+# Waydroid has two runtimes: the system container (step 1, runs Android
+# itself) and a per-user session daemon that bridges your Linux user to
+# the container -- clipboard, input, surface creation, `app launch`
+# IPC all go through it. `waydroid app launch` silently no-ops if the
+# session is not RUNNING, so we background-start it and poll until it
+# is ready (up to 10s).
+if ! waydroid session status 2>/dev/null | grep -q RUNNING; then
+  waydroid session start >/dev/null 2>&1 &
+  for _ in {1..10}; do
+    sleep 1
+    waydroid session status 2>/dev/null | grep -q RUNNING && break
+  done
+fi
+
+# 4. X11 hosts need a nested Wayland compositor; on Wayland this is a no-op
+if [[ ${XDG_SESSION_TYPE:-x11} != wayland ]] && ! pgrep -x weston >/dev/null; then
+  command -v weston >/dev/null || { echo "error: install weston (sudo apt install weston)" >&2; exit 1; }
+  weston --width=1600 --height=900 >/dev/null 2>&1 &
+  sleep 1
+  export WAYLAND_DISPLAY=wayland-1
+fi
+
+exec waydroid app launch "$PKG"

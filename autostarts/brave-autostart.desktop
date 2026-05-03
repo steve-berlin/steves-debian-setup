@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Brave Browser Autostart
+Exec=/usr/bin/brave-browser
+StartupNotify=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
