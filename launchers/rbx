@@ -2,9 +2,22 @@
 # rbx — launch Roblox in Waydroid with T480 performance tweaks.
 # Mirrors the pattern of ~/.local/bin/stm and the `skl` alias in ~/.zshrc:
 # stop TLP, drop swappiness, pin governor to performance, then launch.
-set -e
+set -euo pipefail
 
 PKG=${RBX_PKG:-com.roblox.client}
+WAYLAND_SOCKET=wayland-1
+
+for cmd in waydroid sudo systemctl; do
+  command -v "$cmd" >/dev/null \
+    || { echo "error: $cmd not found in PATH" >&2; exit 1; }
+done
+
+# Helper: succeeds iff the user-side waydroid session is RUNNING.
+# `waydroid status` is the only valid status command — `waydroid session`
+# only accepts start/stop, not status.
+session_running() {
+  waydroid status 2>/dev/null | grep -qE "^Session:[[:space:]]+RUNNING"
+}
 
 # 1. system container (started once, stays up until reboot)
 if ! systemctl is-active --quiet waydroid-container; then
@@ -16,28 +29,38 @@ sudo systemctl stop tlp
 sudo sysctl vm.swappiness=10
 sudo cpupower frequency-set -g performance
 
-# 3. user-side session.
-#
-# Waydroid has two runtimes: the system container (step 1, runs Android
-# itself) and a per-user session daemon that bridges your Linux user to
-# the container -- clipboard, input, surface creation, `app launch`
-# IPC all go through it. `waydroid app launch` silently no-ops if the
-# session is not RUNNING, so we background-start it and poll until it
-# is ready (up to 10s).
-if ! waydroid session status 2>/dev/null | grep -q RUNNING; then
-  waydroid session start >/dev/null 2>&1 &
-  for _ in {1..10}; do
-    sleep 1
-    waydroid session status 2>/dev/null | grep -q RUNNING && break
-  done
+# 3. X11 hosts need a nested Wayland compositor; on Wayland this is a no-op.
+#    Must run BEFORE step 4: `waydroid session start` reads WAYLAND_DISPLAY
+#    at fork time, so exporting it afterward is too late.
+if [[ ${XDG_SESSION_TYPE:-x11} != wayland ]]; then
+  command -v weston >/dev/null \
+    || { echo "error: install weston (sudo apt install weston)" >&2; exit 1; }
+  sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$WAYLAND_SOCKET"
+  if [[ ! -S $sock ]]; then
+    weston --socket="$WAYLAND_SOCKET" --width=1600 --height=900 \
+      >/dev/null 2>&1 &
+    for _ in {1..20}; do
+      [[ -S $sock ]] && break
+      sleep 0.5
+    done
+    [[ -S $sock ]] \
+      || { echo "error: weston did not create $sock within 10s" >&2; exit 1; }
+  fi
+  export WAYLAND_DISPLAY=$WAYLAND_SOCKET
 fi
 
-# 4. X11 hosts need a nested Wayland compositor; on Wayland this is a no-op
-if [[ ${XDG_SESSION_TYPE:-x11} != wayland ]] && ! pgrep -x weston >/dev/null; then
-  command -v weston >/dev/null || { echo "error: install weston (sudo apt install weston)" >&2; exit 1; }
-  weston --width=1600 --height=900 >/dev/null 2>&1 &
-  sleep 1
-  export WAYLAND_DISPLAY=wayland-1
+# 4. user-side session daemon. Bridges this Linux user to the Android
+#    container — clipboard, input, surface creation, and `app launch` IPC
+#    all go through it. `waydroid app launch` silently no-ops if the
+#    session is not RUNNING, so background-start it and poll until ready.
+if ! session_running; then
+  waydroid session start >/dev/null 2>&1 &
+  for _ in {1..30}; do
+    sleep 1
+    session_running && break
+  done
+  session_running \
+    || { echo "error: waydroid session did not reach RUNNING within 30s" >&2; exit 1; }
 fi
 
 exec waydroid app launch "$PKG"

@@ -45,19 +45,28 @@ the path is `~/.steam/steam/steamapps/libraryfolders.vdf` — adjust the
 
 ## `rbx` — Roblox-on-Waydroid launcher
 
-Same perf tweaks as `stm`, then:
+Order matters here — the X11/weston step has to land before the session
+start, otherwise the session daemon inherits no `WAYLAND_DISPLAY` and
+silently has no surface to render to:
 
 1. Starts `waydroid-container.service` if not already running (sudo
    once per reboot).
-2. Backgrounds `waydroid session start` and polls `waydroid session
-   status` for up to 10 s. Waydroid has two runtimes: the system-wide
-   container (owns the Android processes) and a per-user session
-   daemon (clipboard, input, surface creation, `app launch` IPC).
-   `waydroid app launch` silently no-ops if the session is not
-   `RUNNING`, hence the poll.
-3. On X11, spawns nested `weston` at 1600x900 and exports
-   `WAYLAND_DISPLAY=wayland-1`. On Wayland, no-op.
-4. `exec waydroid app launch com.roblox.client`. Override the package
+2. Applies the perf profile (TLP stop, swappiness, governor — same as
+   `stm`/`skl`).
+3. On X11, spawns nested `weston --socket=wayland-1` at 1600x900,
+   waits for the socket to appear under `$XDG_RUNTIME_DIR`, then
+   exports `WAYLAND_DISPLAY=wayland-1`. Pinning the socket name
+   (rather than letting weston pick) keeps the next step deterministic.
+   On Wayland, no-op.
+4. Backgrounds `waydroid session start` and polls `waydroid status`
+   for `Session: RUNNING` (up to 30 s). Waydroid has two runtimes:
+   the system container (owns the Android processes) and a per-user
+   session daemon (clipboard, input, surface creation, `app launch`
+   IPC). `waydroid app launch` silently no-ops if the session is not
+   `RUNNING`, hence the poll. Note: `waydroid session status` is NOT
+   a command — `session` only takes `start`/`stop`. Use `waydroid status`
+   (top-level) and grep its output.
+5. `exec waydroid app launch com.roblox.client`. Override the package
    via `$RBX_PKG`.
 
 Add the alias to `~/.zshrc`:
