@@ -6,6 +6,15 @@
 #
 # Every step explains what it does in plain English and asks before running.
 
+# Re-exec under bash if invoked as `sh install-roblox.sh`. The script uses
+# `[[`, `((`, and other bashisms; under dash these silently return nonzero
+# inside `if` conditions (set -e doesn't fire there), so the script limps
+# along making wrong decisions instead of erroring out cleanly. POSIX test
+# below works in both shells.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 ROBLOX_DIR=${ROBLOX_DIR:-$HOME/install_roblox}
@@ -89,22 +98,69 @@ info "Display server: $session"
 
 # ---- Step 1: waydroid + kernel ----
 section "1/8  waydroid & kernel modules"
-eli5 "Waydroid runs an Android container on top of your Linux kernel. It
-      needs one kernel module: binder_linux, which is how Android apps talk
-      to each other. Liquorix (your kernel) ships it built-in; we just check
-      it is loadable."
+eli5 "Waydroid runs an Android container on top of your Linux kernel. The
+      kernel has to speak 'binder' -- a fast IPC (inter-process messaging)
+      mechanism Android invented in 2008. Every framework call inside
+      Android goes through it, so without binder the container boots but
+      apps cannot talk to system services and immediately fall over.
+      Binder is upstream in mainline Linux as CONFIG_ANDROID_BINDER_IPC,
+      but most desktop kernels leave it off. Debian stock (linux-image-amd64)
+      ships it built-in; Liquorix 6.19 does NOT, which breaks waydroid init.
+      We check now rather than after a 500 MB download."
 
 require_cmd waydroid
 ok "waydroid $(waydroid --version)"
 
-if [[ -d /sys/module/binder_linux ]] || lsmod 2>/dev/null | grep -q '^binder_linux'; then
-  ok "binder_linux active"
-elif modinfo binder_linux &>/dev/null; then
-  info "binder_linux available but not loaded"
-  ask "load it now (sudo modprobe binder_linux)?" && run sudo modprobe binder_linux
-else
-  warn "binder_linux not found — your kernel may not support Waydroid (check /boot/config-\$(uname -r))"
-fi
+# Three possible binder states:
+#   loaded         - active in /sys/module, or built-in (binder shows in /proc/filesystems)
+#   module-on-disk - .ko file exists for the running kernel, just not loaded yet
+#   missing        - neither: kernel was built without binder support at all
+binder_state() {
+  [[ -d /sys/module/binder_linux ]] && { echo loaded; return; }
+  grep -qw binder /proc/filesystems 2>/dev/null && { echo loaded; return; }
+  find "/lib/modules/$(uname -r)" -name 'binder_linux.ko*' 2>/dev/null \
+    | grep -q . && { echo module-on-disk; return; }
+  echo missing
+}
+
+case $(binder_state) in
+  loaded)
+    ok "binder_linux active"
+    ;;
+  module-on-disk)
+    info "binder_linux available but not loaded -- loading now"
+    run sudo modprobe binder_linux
+    ;;
+  missing)
+    err "binder_linux is not present in kernel $(uname -r)."
+    config=/boot/config-$(uname -r)
+    if [[ -r $config ]] && ! grep -q '^CONFIG_ANDROID_BINDER_IPC=[ym]' "$config"; then
+      info "confirmed via $config: kernel was built WITHOUT CONFIG_ANDROID_BINDER_IPC."
+      info "(Liquorix kernels turn this off; Debian's stock kernel turns it on.)"
+    fi
+    info "fix options, in order of effort:"
+    info "  1. install Debian's stock kernel alongside Liquorix (easy, recommended):"
+    info "       sudo apt install linux-image-amd64 && sudo reboot"
+    info "     -- ships CONFIG_ANDROID_BINDER_IPC=y. Does NOT remove Liquorix;"
+    info "     GRUB keeps both and lets you pick at boot. Run Roblox on stock,"
+    info "     Liquorix for everything else."
+    info "  2. install an out-of-tree binder DKMS module (anbox-modules-dkms /"
+    info "     binder_linux-dkms from third-party repos -- not in Debian main)."
+    info "  3. rebuild your current kernel with binder enabled (~30-60 min on a T480,"
+    info "     only do this if 1 and 2 are not options):"
+    info "       sudo apt install build-essential libssl-dev libelf-dev libncurses-dev \\"
+    info "            bc flex bison dwarves zstd fakeroot"
+    info "       # Liquorix source: https://liquorix.net/sources/  (or git: zen-kernel/zen-kernel)"
+    info "       # Debian source:   apt source linux-image-\$(uname -r)"
+    info "       cd <kernel-source>/"
+    info "       cp /boot/config-\$(uname -r) .config"
+    info "       scripts/config --enable CONFIG_ANDROID_BINDER_IPC \\"
+    info "                      --enable CONFIG_ANDROID_BINDERFS"
+    info "       make olddefconfig && make -j\$(nproc) bindeb-pkg"
+    info "       sudo dpkg -i ../linux-image-*.deb && sudo reboot"
+    exit 1
+    ;;
+esac
 
 # ---- Step 2: weston (X11 only) ----
 section "2/8  nested Wayland compositor (X11 only)"
@@ -137,6 +193,20 @@ eli5 "One-time download of the Android system image (~500 MB, VANILLA
 if [[ -f /var/lib/waydroid/waydroid.cfg ]]; then
   ok "already initialised"
 else
+  # waydroid init pulls .lzip-compressed system + vendor images and shells
+  # out to the external `lzip` binary to decompress them. The Debian
+  # waydroid package does not depend on lzip, so init fails partway
+  # through ("lzip: not found", leaving /var/lib/waydroid half-populated)
+  # unless we install it first.
+  if ! command -v lzip >/dev/null; then
+    info "lzip missing -- waydroid init needs it to decompress system images"
+    if ask "apt install lzip now?"; then
+      run sudo apt-get update
+      run sudo apt-get install -y lzip
+    else
+      err "cannot continue without lzip"; exit 1
+    fi
+  fi
   if ask "run sudo waydroid init -s VANILLA now?"; then
     run sudo waydroid init -s VANILLA
   else

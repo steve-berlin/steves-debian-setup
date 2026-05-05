@@ -135,6 +135,37 @@ Decisions worth knowing:
   HTML twice) and falls back to a manual-download message when it
   hits a Cloudflare challenge — those return HTTP 200, so we
   re-check the file's ZIP magic bytes before declaring success.
+- **Step 3 installs `lzip` before `waydroid init`.** Waydroid's
+  system + vendor images are `.lzip`-compressed and `init` shells out
+  to the external `lzip` binary to extract them. The Debian `waydroid`
+  package does not depend on lzip, so a fresh box hits a half-populated
+  `/var/lib/waydroid` and the init fails partway through. Step 3 checks
+  for lzip and offers to apt-install it before running init.
+- **Top of the script re-execs under bash if invoked as `sh
+  install-roblox.sh`.** The script uses `[[`, `((`, and `[Yy]*` glob
+  matching, all of which dash treats as unknown commands. Crucially,
+  `set -e` does **not** fire on bashism failures inside `if` conditions,
+  so dash limps along making wrong decisions (e.g. `ask` returns false
+  even when the user types `y`) instead of erroring out at line 1.
+  The guard uses POSIX `[ -z "${BASH_VERSION:-}" ]` so it parses under
+  either shell.
+- **Step 1's binder check hard-fails when the kernel is missing
+  `CONFIG_ANDROID_BINDER_IPC`.** Binder is the Android IPC mechanism;
+  the entire Android userland inside Waydroid talks through it. It
+  lives upstream in mainline Linux but is a config option distros
+  toggle: Debian stock (`linux-image-amd64`) builds it `=y`, Liquorix
+  6.19 builds it off. The previous check looked at `/sys/module/binder_linux`
+  and `lsmod`, but a not-compiled-in kernel exposes neither, and the
+  fallback `modinfo` branch silently warned-and-continued — burning a
+  500 MB image download before failing at `waydroid init`. The new
+  three-way probe checks (a) `/sys/module/binder_linux`, (b)
+  `binder` in `/proc/filesystems` (built-in signature), (c)
+  `binder_linux.ko*` under `/lib/modules/$(uname -r)` (loadable
+  module on disk). All three miss → exit with the actionable fix
+  (`sudo apt install linux-image-amd64 && sudo reboot` is the easy
+  path; DKMS or a kernel rebuild are the harder ones). No "override
+  and continue" escape hatch — if you genuinely know better than
+  the probe, edit the script.
 
 Roblox-specific layout (`~/install_roblox/`, populated at runtime):
 
