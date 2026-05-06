@@ -153,7 +153,7 @@ Decisions worth knowing:
   `CONFIG_ANDROID_BINDER_IPC`.** Binder is the Android IPC mechanism;
   the entire Android userland inside Waydroid talks through it. It
   lives upstream in mainline Linux but is a config option distros
-  toggle: Debian stock (`linux-image-amd64`) builds it `=y`, Liquorix
+  toggle: Debian stock (`linux-image-amd64`) builds it `=m`, Liquorix
   6.19 builds it off. The previous check looked at `/sys/module/binder_linux`
   and `lsmod`, but a not-compiled-in kernel exposes neither, and the
   fallback `modinfo` branch silently warned-and-continued — burning a
@@ -162,10 +162,28 @@ Decisions worth knowing:
   `binder` in `/proc/filesystems` (built-in signature), (c)
   `binder_linux.ko*` under `/lib/modules/$(uname -r)` (loadable
   module on disk). All three miss → exit with the actionable fix
-  (`sudo apt install linux-image-amd64 && sudo reboot` is the easy
-  path; DKMS or a kernel rebuild are the harder ones). No "override
-  and continue" escape hatch — if you genuinely know better than
-  the probe, edit the script.
+  (`sudo apt install linux-image-amd64 && sudo reboot` boots into the
+  Debian kernel alongside Liquorix; DKMS or a kernel rebuild are the
+  harder ones). No "override and continue" escape hatch — if you
+  genuinely know better than the probe, edit the script.
+- **Step 1 also fixes the `vndbinder`/`hwbinder` device-discovery
+  case.** Even when binder *is* loaded, waydroid needs three separate
+  binder IPC domains: `binder` (app/framework), `hwbinder` (HALs),
+  `vndbinder` (vendor processes). They are three security contexts,
+  not aliases. Most desktop kernels build with
+  `CONFIG_ANDROID_BINDER_DEVICES="binder"` (one device) and disable
+  `CONFIG_ANDROID_BINDERFS` (no dynamic creation), so `waydroid init`
+  fails with `Binder node "vndbinder" for waydroid not found`. The
+  fix: `binder_linux` has a module parameter `devices=` (charp) that
+  overrides the kernel's static list. Step 1 checks for `/dev/binder`,
+  `/dev/hwbinder`, `/dev/vndbinder`; if any are missing, it writes
+  `/etc/modprobe.d/waydroid-binder.conf` with
+  `options binder_linux devices=binder,hwbinder,vndbinder`,
+  `rmmod`s, and `modprobe`s. Idempotent because the missing-device
+  check skips the whole block on rerun. Built-in binder (`=y`) cannot
+  be rebound this way — in that case the script tells the user to add
+  `binder_linux.devices=binder,hwbinder,vndbinder` to GRUB's kernel
+  command line and reboot.
 
 Roblox-specific layout (`~/install_roblox/`, populated at runtime):
 

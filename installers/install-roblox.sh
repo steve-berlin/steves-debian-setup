@@ -99,14 +99,15 @@ info "Display server: $session"
 # ---- Step 1: waydroid + kernel ----
 section "1/8  waydroid & kernel modules"
 eli5 "Waydroid runs an Android container on top of your Linux kernel. The
-      kernel has to speak 'binder' -- a fast IPC (inter-process messaging)
-      mechanism Android invented in 2008. Every framework call inside
-      Android goes through it, so without binder the container boots but
-      apps cannot talk to system services and immediately fall over.
-      Binder is upstream in mainline Linux as CONFIG_ANDROID_BINDER_IPC,
-      but most desktop kernels leave it off. Debian stock (linux-image-amd64)
-      ships it built-in; Liquorix 6.19 does NOT, which breaks waydroid init.
-      We check now rather than after a 500 MB download."
+      kernel has to speak 'binder' -- a fast IPC mechanism Android invented
+      in 2008. Every framework call inside Android goes through it. Android
+      actually uses three separate binder domains for security isolation:
+      'binder' (apps), 'hwbinder' (hardware HALs), 'vndbinder' (vendor
+      processes). Liquorix 6.19 ships with binder entirely disabled --
+      hard fail. Debian stock (linux-image-amd64) ships binder as a module
+      but creates only the 'binder' device by default; we conjure the
+      other two by reloading binder_linux with devices=binder,hwbinder,
+      vndbinder. We check both before the 500 MB image download."
 
 require_cmd waydroid
 ok "waydroid $(waydroid --version)"
@@ -161,6 +162,62 @@ case $(binder_state) in
     exit 1
     ;;
 esac
+
+# Waydroid expects three separate binder IPC domains: binder (apps),
+# hwbinder (hardware HALs), vndbinder (vendor processes). They are three
+# different security contexts, not aliases. Most desktop kernels build
+# CONFIG_ANDROID_BINDER_DEVICES="binder" (just the one) and disable
+# CONFIG_ANDROID_BINDERFS, so hwbinder/vndbinder don't exist out of the
+# box. Fix: load binder_linux with devices=binder,hwbinder,vndbinder via
+# /etc/modprobe.d/. Built-in binder needs the same value on the kernel
+# cmdline instead, since modprobe can't rebind a built-in module.
+missing_devs=()
+for dev in binder hwbinder vndbinder; do
+  [[ -c /dev/$dev ]] || missing_devs+=("$dev")
+done
+
+if (( ${#missing_devs[@]} > 0 )); then
+  warn "missing binder device(s): ${missing_devs[*]}"
+  info "kernel created fewer binder nodes than waydroid needs."
+
+  binder_conf=/boot/config-$(uname -r)
+  if [[ -r $binder_conf ]] && grep -q '^CONFIG_ANDROID_BINDER_IPC=y' "$binder_conf"; then
+    err "binder is built-in (=y); modprobe cannot rebind it on this kernel."
+    info "add this to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub,"
+    info "then run 'sudo update-grub && sudo reboot':"
+    info "    binder_linux.devices=binder,hwbinder,vndbinder"
+    exit 1
+  fi
+
+  modprobe_conf=/etc/modprobe.d/waydroid-binder.conf
+  info "writing $modprobe_conf and reloading binder_linux."
+  if (( dry )); then
+    printf '%sDRY%s   echo "options binder_linux devices=binder,hwbinder,vndbinder" | sudo tee %s\n' \
+      "$c_dim" "$c_off" "$modprobe_conf"
+  else
+    echo 'options binder_linux devices=binder,hwbinder,vndbinder' \
+      | sudo tee "$modprobe_conf" >/dev/null
+  fi
+  # rmmod fails with "Device or resource busy" if waydroid-container is up
+  # (LXC holds /dev/binder open). Stop it first; safe even if already stopped.
+  if systemctl is-active --quiet waydroid-container 2>/dev/null; then
+    info "stopping waydroid-container so binder_linux can be unloaded"
+    run sudo systemctl stop waydroid-container
+  fi
+  if ! run sudo rmmod binder_linux; then
+    err "rmmod failed -- something else is holding binder_linux."
+    info "$modprobe_conf is in place; reboot and the new device list will take effect."
+    exit 1
+  fi
+  run sudo modprobe binder_linux
+  if ! (( dry )); then
+    for dev in binder hwbinder vndbinder; do
+      [[ -c /dev/$dev ]] \
+        || { err "/dev/$dev still missing after reload"; exit 1; }
+    done
+    ok "all three binder devices now present"
+  fi
+fi
 
 # ---- Step 2: weston (X11 only) ----
 section "2/8  nested Wayland compositor (X11 only)"
