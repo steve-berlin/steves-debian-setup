@@ -77,6 +77,33 @@ alias rbx='~/install_roblox/rbx'
 
 (Or symlink `rbx` into `~/.local/bin/`; pick one.)
 
+## `nic-boost` — temporary WiFi/EEE perf boost
+
+Runtime-only NIC tweaks for bandwidth-heavy work. Deployed by
+`installers/install-nic-tuning.sh` into `~/.local/bin/nic-boost`.
+Lives here, not in the permanent NIC installer, because both settings
+cost battery *exactly when traffic is low* (they remove idle-time
+hardware napping):
+
+```
+sudo iw dev <wifi> set power_save off    # ~0.3-0.5 W extra at idle
+sudo ethtool --set-eee <eth> eee off     # ~0.5 W extra on idle link
+```
+
+Three call shapes:
+
+| Invocation                | Behavior                                       |
+|---------------------------|------------------------------------------------|
+| `nic-boost`               | apply, persist until reboot or manual `--off`  |
+| `nic-boost <command...>`  | apply, run command, revert on its exit         |
+| `nic-boost --off`         | revert manually (settings back to defaults)    |
+
+The wrapped form sets a `trap revert EXIT INT TERM` so the revert
+fires even on Ctrl-C or kill. No modprobe/dispatcher files are ever
+written — settings revert on reboot automatically because the kernel
+re-applies driver defaults. This is the same on/off pattern as
+`stm`/`rbx` for TLP/governor (gaming-only, no permanent change).
+
 ## `skl` — Minecraft (zsh alias, not a script)
 
 Lives in `~/.zshrc` as a one-liner because there's nothing to wrap

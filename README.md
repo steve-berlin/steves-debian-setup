@@ -1,9 +1,10 @@
 # steves_debian_setup
 
 Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap, post-install
-verifier, and small installers for Steam, The Long Dark, Anki, and Roblox
-(via Waydroid). Plus the launcher wrappers (`stm`, `rbx`) that apply a
-gaming performance profile before each run.
+verifier, and small installers for Steam, The Long Dark, Anki, Roblox
+(via Waydroid), and NIC tuning. Plus launcher wrappers — `stm`, `rbx`
+for the gaming perf profile, and `nic-boost` for opt-in WiFi/EEE
+bandwidth boosts.
 
 Targeted at a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel,
 X11). Most scripts degrade to a warning rather than hard-failing on
@@ -24,11 +25,15 @@ bash installers/check-setup.sh
 
 # 3. game/app installers — pick what you want
 bash installers/install-steam.sh
-bash installers/install-tld.sh       # The Long Dark (needs stm + Steam)
+bash installers/install-tld.sh             # The Long Dark (needs stm + Steam)
 bash installers/install-anki.sh
-bash installers/install-roblox.sh    # interactive, prompts per step
+bash installers/check-roblox-prereqs.sh    # gate before the big install
+bash installers/install-roblox.sh          # interactive, prompts per step
 
-# 4. drop launchers and autostarts in place
+# 4. networking polish (permanent, zero power cost) — also deploys nic-boost
+bash installers/install-nic-tuning.sh
+
+# 5. drop launchers and autostarts in place
 install -m 755 launchers/stm launchers/rbx ~/.local/bin/
 cp autostarts/*.desktop ~/.config/autostart/
 ```
@@ -40,8 +45,8 @@ per-script details.
 ## Repo layout
 
 ```
-installers/    install-*.sh, utils.sh, check-setup.sh
-launchers/     stm (Steam), rbx (Roblox/Waydroid)
+installers/    install-*.sh, utils.sh, check-setup.sh, check-roblox-prereqs.sh
+launchers/     stm (Steam), rbx (Roblox/Waydroid), nic-boost (NIC perf)
 autostarts/    *.desktop for ~/.config/autostart
 backup.zshrc   reference copy of ~/.zshrc (do not source as-is)
 CLAUDE.md      orientation map for Claude Code

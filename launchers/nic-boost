@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# nic-boost — temporary NIC perf tweaks for bandwidth-heavy work.
+# Disables WiFi power save and ethernet EEE on every detected interface.
+# Both settings cost battery exactly when traffic is low (because they
+# remove the idle-time napping); they live here, not in the permanent
+# install-nic-tuning.sh, so they're opt-in per session.
+#
+# Reverts automatically:
+#   - on reboot (runtime-only — no modprobe / dispatcher files written)
+#   - when the wrapped command exits, if invoked as `nic-boost <command...>`
+#   - on `nic-boost --off` (manual revert)
+
+set -euo pipefail
+
+mode=on
+if [[ ${1:-} == --off ]]; then mode=off; shift; fi
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  cat <<EOF
+Usage:
+  nic-boost                 apply boost; revert on reboot
+  nic-boost <command...>    apply boost, run command, revert on its exit
+  nic-boost --off           revert manually (back to defaults)
+EOF
+  exit 0
+fi
+
+eth=() wifi=()
+for i in /sys/class/net/*; do
+  n=${i##*/}
+  [[ $n == lo || $n == vir* || $n == docker* || $n == br-* ]] && continue
+  if [[ -d $i/wireless ]]; then wifi+=("$n")
+  elif [[ -e $i/device/driver ]]; then eth+=("$n"); fi
+done
+
+apply() {
+  for n in "${wifi[@]}"; do
+    command -v iw >/dev/null && sudo iw dev "$n" set power_save off 2>/dev/null || true
+  done
+  for n in "${eth[@]}"; do
+    sudo ethtool --set-eee "$n" eee off 2>/dev/null || true
+  done
+}
+
+revert() {
+  for n in "${wifi[@]}"; do
+    command -v iw >/dev/null && sudo iw dev "$n" set power_save on 2>/dev/null || true
+  done
+  for n in "${eth[@]}"; do
+    sudo ethtool --set-eee "$n" eee on 2>/dev/null || true
+  done
+}
+
+if [[ $mode == off ]]; then
+  revert
+  echo "nic-boost off (wifi power_save=on, eee=on)"
+  exit 0
+fi
+
+apply
+echo "nic-boost on  (wifi power_save=off, eee=off — eth: ${eth[*]:-none}  wifi: ${wifi[*]:-none})"
+
+if (( $# > 0 )); then
+  trap revert EXIT INT TERM
+  "$@"
+else
+  echo "(reverts on reboot; or run 'nic-boost --off' to revert manually)"
+fi

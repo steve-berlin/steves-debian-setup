@@ -26,11 +26,15 @@ Read those when working inside that subfolder; this file is just the map.
    the snap version with the official deb repo.
 4. Game/app installers as needed:
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
-   `install-roblox.sh`. Each is independent.
-5. `launchers/stm` and `launchers/rbx` go to `~/.local/bin/`. The
+   `install-roblox.sh` (run `check-roblox-prereqs.sh` first).
+   Each is independent.
+5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
+   dispatcher tweaks (zero power cost) and deploys `nic-boost`
+   to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
+6. `launchers/stm` and `launchers/rbx` go to `~/.local/bin/`. The
    `skl` Minecraft launcher lives as a zsh alias, not a script — see
    `backup.zshrc` for the exact line.
-6. `autostarts/*.desktop` go to `~/.config/autostart/`.
+7. `autostarts/*.desktop` go to `~/.config/autostart/`.
 
 ## Conventions every installer follows
 

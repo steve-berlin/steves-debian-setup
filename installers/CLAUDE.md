@@ -199,6 +199,49 @@ Steam/Minecraft content, an Android container is tied to the kernel and
 `/var` is the conventional path, so there is no split-partition story
 here.
 
+## `check-roblox-prereqs.sh` — pre-flight gate for `install-roblox.sh`
+
+Standalone preflight that mirrors the conditions list for the Roblox
+installer so users can run it before the 8-step interactive script
+instead of bailing partway through. Same `[OK]/[FAIL]` style as
+`check-setup.sh`; exits 0 if every hard condition is met, 1 if any
+fails. Soft conditions print `[WARN]` without flipping the exit code.
+
+Hard checks:
+1. Running kernel name does NOT contain `liquorix`/`zen` (those builds
+   disable `CONFIG_ANDROID_BINDER_IPC` entirely; reboot into stock).
+2. `CONFIG_ANDROID_BINDER_IPC=m` in `/boot/config-$(uname -r)`. `=y`
+   downgrades to a `[WARN]` (works, but you'll need to add a kernel
+   cmdline arg).
+3. `waydroid` binary on PATH.
+4. `getent hosts ota.waydro.id` resolves (image host reachable).
+
+Soft checks: waydroid-container running (installer stops it),
+sudo cached, stdin TTY, X11 vs Wayland session.
+
+## `install-nic-tuning.sh` — permanent NIC tuning (zero power cost)
+
+Drops two artifacts plus the `nic-boost` launcher:
+
+| Path                                                | Purpose                                        |
+|-----------------------------------------------------|------------------------------------------------|
+| `/etc/sysctl.d/99-nic-tuning.conf`                  | BBR + fq, larger buffers, TFO, MTU probing     |
+| `/etc/NetworkManager/dispatcher.d/99-nic-tuning`    | per-eth-iface WoL off + ring buffers max       |
+| `~/.local/bin/nic-boost`                            | copied from `launchers/nic-boost` (755)        |
+
+Modes: bare install, `--uninstall` (removes all three), `--dry-run`.
+Idempotent. Hard-fails if `ethtool` or `sysctl` are missing.
+
+The split is deliberate: this script only writes settings whose power
+cost is zero or negligible. The energy-hungry settings (WiFi
+`power_save=0`, ethernet EEE off) cost battery exactly *when traffic
+is low* — those live in `launchers/nic-boost` so they're opt-in per
+session and revert on reboot. See `launchers/CLAUDE.md` for nic-boost.
+
+The dispatcher script bails early on wifi (`exit 0` if
+`/sys/class/net/$iface/wireless` exists) so it never touches WiFi
+power state — kept ethernet-only on purpose.
+
 ## `setup_nordvpn.sh` — replace snap with official deb
 
 Removes any snap-installed nordvpn, runs the official install.sh,
