@@ -33,7 +33,10 @@ bash installers/install-roblox.sh          # interactive, prompts per step
 # 4. networking polish (permanent, zero power cost) — also deploys nic-boost
 bash installers/install-nic-tuning.sh
 
-# 5. drop launchers and autostarts in place
+# 5. optional: persist tmux sessions across reboots (tpm + resurrect + continuum)
+bash installers/install-tmux-immortal.sh
+
+# 6. drop launchers and autostarts in place
 install -m 755 launchers/stm launchers/rbx ~/.local/bin/
 cp autostarts/*.desktop ~/.config/autostart/
 ```

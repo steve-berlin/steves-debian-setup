@@ -31,10 +31,12 @@ Read those when working inside that subfolder; this file is just the map.
 5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
    dispatcher tweaks (zero power cost) and deploys `nic-boost`
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
-6. `launchers/stm` and `launchers/rbx` go to `~/.local/bin/`. The
+6. Optional tmux persistence: `install-tmux-immortal.sh` adds tpm
+   + tmux-resurrect + tmux-continuum so sessions survive reboots.
+7. `launchers/stm` and `launchers/rbx` go to `~/.local/bin/`. The
    `skl` Minecraft launcher lives as a zsh alias, not a script — see
    `backup.zshrc` for the exact line.
-7. `autostarts/*.desktop` go to `~/.config/autostart/`.
+8. `autostarts/*.desktop` go to `~/.config/autostart/`.
 
 ## Conventions every installer follows
 

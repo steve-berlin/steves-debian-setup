@@ -242,6 +242,45 @@ The dispatcher script bails early on wifi (`exit 0` if
 `/sys/class/net/$iface/wireless` exists) so it never touches WiFi
 power state — kept ethernet-only on purpose.
 
+## `install-tmux-immortal.sh` — persist tmux sessions across reboots
+
+Drops three pieces:
+
+| Path                                          | Purpose                                       |
+|-----------------------------------------------|-----------------------------------------------|
+| `~/.tmux/plugins/{tpm,tmux-resurrect,tmux-continuum}` | plugin manager + save/restore + autosave |
+| `~/.tmux.conf` (only if absent)               | sane defaults + plugin lines + restore=on     |
+| `~/.config/autostart/tmux-immortal.desktop`   | starts a detached `main` session at login     |
+
+Modes: bare install, `--uninstall` (nukes plugins + autostart, leaves
+`~/.tmux.conf` alone), `--dry-run`. Idempotent.
+
+Decisions worth knowing:
+
+- **Never overwrites an existing `~/.tmux.conf`.** If the file is there,
+  the script prints the four `set -g @plugin …` + `run` lines and tells
+  you to merge them in by hand. An earlier draft used a header marker
+  (`# tmux-immortal-managed`) to detect "we own this file" and overwrite,
+  but that broke the moment the user *appended* the marker block to a
+  hand-rolled config — re-runs would clobber the prefix rebind. The
+  simpler invariant (file exists → no-op) wins.
+- **Headless plugin install needs a live tmux server.** `tpm/bin/install_plugins`
+  reads its install path via `tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH`,
+  which queries tmux's own global env (not the bash env). Setting
+  `TMUX_PLUGIN_MANAGER_PATH=…` as a bash var does nothing. Step 4 spins
+  up a throwaway `_tpm_init` session running `sleep 30` to keep a server
+  alive, `tmux setenv -g`s the path, runs `install_plugins`, then
+  `kill-session -t _tpm_init`. Any pre-existing user sessions are
+  untouched.
+- **Autostart spawns `tmux new-session -d -s main`, not `start-server`.**
+  A server with zero sessions exits immediately. `main` is a placeholder
+  if continuum has nothing saved yet (harmless empty session); once
+  continuum has restore data, it adds the saved sessions on top of
+  `main` at server-start time.
+- **Continuum saves every 15 min, not faster.** Faster intervals churn
+  disk for marginal gain — resurrect's pane-content capture is not free
+  on big scrollback. 15 min is the upstream default.
+
 ## `setup_nordvpn.sh` — replace snap with official deb
 
 Removes any snap-installed nordvpn, runs the official install.sh,
