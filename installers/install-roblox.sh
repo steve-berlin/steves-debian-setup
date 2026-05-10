@@ -273,15 +273,17 @@ fi
 
 # ---- Step 4: container service ----
 section "4/8  waydroid-container.service"
-eli5 "A system service keeps the Android container alive between runs.
-      Enabling it once means the launcher can attach instantly, without
-      sudo, every time you hit play."
+eli5 "A system service runs the Android container manager. We start it
+      now but do NOT enable-on-boot: at boot, weston is not running yet,
+      so a stale session config referencing /run/user/\$UID/wayland-1
+      would make the LXC bind-mount fail. The launcher (rbx) starts
+      this service on demand, after weston is up."
 
 if systemctl is-active --quiet waydroid-container; then
   ok "waydroid-container running"
 else
-  ask "enable + start waydroid-container.service?" \
-    && run sudo systemctl enable --now waydroid-container
+  ask "start waydroid-container.service (without enabling on boot)?" \
+    && run sudo systemctl start waydroid-container
 fi
 
 # ---- Step 5: libndk ARM translation ----
@@ -332,27 +334,41 @@ eli5 "Uptodown mirrors unmodified vendor APKs. We first try to download
 
 mkdir -p "$ROBLOX_DIR"
 
-apk_ok() { [[ -s $APK_PATH ]] && head -c 4 "$APK_PATH" | grep -q 'PK'; }
+# Roblox is ~150 MB. The uptodown scrape has historically grabbed the
+# wrong link (e.g. the 10 MB Uptodown App Store APK) which still passes
+# a PK-magic check. Size-gate at 50 MB to reject those impostors.
+apk_ok() {
+  [[ -s $APK_PATH ]] || return 1
+  head -c 4 "$APK_PATH" | grep -q 'PK' || return 1
+  local sz
+  sz=$(stat -c %s "$APK_PATH")
+  (( sz > 50*1024*1024 ))
+}
 
 if apk_ok; then
   ok "APK already at $APK_PATH ($(du -h "$APK_PATH" | awk '{print $1}'))"
-elif ask "try to fetch APK automatically from $UPTODOWN_URL?"; then
-  require_cmd curl
-  tmp=$(mktemp)
-  # fetch uptodown's download page; || true keeps set -e from killing us
-  # if curl fails -- we want to decide below, not bail here
-  curl -fsSL -A 'Mozilla/5.0' "$UPTODOWN_URL" -o "$tmp" || true
-  # uptodown has used two HTML shapes for the real APK URL; try both
-  dl=$(grep -oE 'https://dw[^"]+\.apk' "$tmp" | head -1 || true)
-  [[ -z $dl ]] && dl=$(grep -oE 'data-url="[^"]+"' "$tmp" | head -1 | sed 's/^data-url="//; s/"$//')
-  rm -f "$tmp"
-  [[ -n $dl ]] && { info "resolved: $dl"; run curl -fL -A 'Mozilla/5.0' "$dl" -o "$APK_PATH"; }
-  # uptodown sometimes serves a Cloudflare page with HTTP 200 -- re-check magic bytes
-  apk_ok || { warn "auto-fetch failed. Open $UPTODOWN_URL in a browser, save as $APK_PATH, then rerun."; exit 1; }
-  ok "APK downloaded"
 else
-  info "no APK present -- drop one at $APK_PATH then rerun"
-  exit 0
+  if [[ -f $APK_PATH ]]; then
+    sz=$(du -h "$APK_PATH" | awk '{print $1}')
+    warn "$APK_PATH exists but is too small ($sz) -- not the Roblox APK"
+    info "removing impostor and re-prompting"
+    run rm -f "$APK_PATH"
+  fi
+  warn "uptodown's HTML scrape has been unreliable -- prefer manual download"
+  info "open $UPTODOWN_URL in a browser, save the ~150 MB APK as $APK_PATH, rerun"
+  if ask "or try the auto-scrape anyway? (likely to grab wrong APK)"; then
+    require_cmd curl
+    tmp=$(mktemp)
+    curl -fsSL -A 'Mozilla/5.0' "$UPTODOWN_URL" -o "$tmp" || true
+    dl=$(grep -oE 'https://dw[^"]+\.apk' "$tmp" | head -1 || true)
+    [[ -z $dl ]] && dl=$(grep -oE 'data-url="[^"]+"' "$tmp" | head -1 | sed 's/^data-url="//; s/"$//')
+    rm -f "$tmp"
+    [[ -n $dl ]] && { info "resolved: $dl"; run curl -fL -A 'Mozilla/5.0' "$dl" -o "$APK_PATH"; }
+    apk_ok || { warn "auto-fetch yielded wrong/missing APK. Download manually and rerun."; rm -f "$APK_PATH"; exit 1; }
+    ok "APK downloaded"
+  else
+    exit 0
+  fi
 fi
 
 # ---- Step 8: install APK ----

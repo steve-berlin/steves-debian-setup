@@ -37,14 +37,18 @@ if [[ ${XDG_SESSION_TYPE:-x11} != wayland ]]; then
     || { echo "error: install weston (sudo apt install weston)" >&2; exit 1; }
   sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$WAYLAND_SOCKET"
   if [[ ! -S $sock ]]; then
-    weston --socket="$WAYLAND_SOCKET" --width=1600 --height=900 \
-      >/dev/null 2>&1 &
+    # setsid so weston survives if rbx exits/times out — otherwise weston
+    # dies, the wayland socket disappears, and waydroid's pending LXC
+    # bind-mount of /run/user/$UID/wayland-1 fails (see waydroid.log).
+    setsid weston --socket="$WAYLAND_SOCKET" --width=1600 --height=900 \
+      </dev/null >/tmp/rbx-weston.log 2>&1 &
+    disown
     for _ in {1..20}; do
       [[ -S $sock ]] && break
       sleep 0.5
     done
     [[ -S $sock ]] \
-      || { echo "error: weston did not create $sock within 10s" >&2; exit 1; }
+      || { echo "error: weston did not create $sock within 10s (see /tmp/rbx-weston.log)" >&2; exit 1; }
   fi
   export WAYLAND_DISPLAY=$WAYLAND_SOCKET
 fi
@@ -54,13 +58,17 @@ fi
 #    all go through it. `waydroid app launch` silently no-ops if the
 #    session is not RUNNING, so background-start it and poll until ready.
 if ! session_running; then
-  waydroid session start >/dev/null 2>&1 &
-  for _ in {1..30}; do
+  # setsid + log file: first-time Android cold boot routinely takes
+  # 60-120s on a T480, well past any reasonable rbx-foreground budget.
+  # Detaching means a long boot doesn't get killed if rbx is Ctrl-C'd.
+  setsid waydroid session start </dev/null >/tmp/rbx-session.log 2>&1 &
+  disown
+  for _ in {1..180}; do
     sleep 1
     session_running && break
   done
   session_running \
-    || { echo "error: waydroid session did not reach RUNNING within 30s" >&2; exit 1; }
+    || { echo "error: waydroid session did not reach RUNNING within 180s (see /tmp/rbx-session.log and /var/lib/waydroid/waydroid.log)" >&2; exit 1; }
 fi
 
 exec waydroid app launch "$PKG"

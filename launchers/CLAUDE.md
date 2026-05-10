@@ -58,14 +58,26 @@ silently has no surface to render to:
    exports `WAYLAND_DISPLAY=wayland-1`. Pinning the socket name
    (rather than letting weston pick) keeps the next step deterministic.
    On Wayland, no-op.
-4. Backgrounds `waydroid session start` and polls `waydroid status`
-   for `Session: RUNNING` (up to 30 s). Waydroid has two runtimes:
-   the system container (owns the Android processes) and a per-user
+4. `setsid`-detaches `waydroid session start` (logs to
+   `/tmp/rbx-session.log`) and polls `waydroid status` for
+   `Session: RUNNING` (up to 180 s). Waydroid has two runtimes: the
+   system container (owns the Android processes) and a per-user
    session daemon (clipboard, input, surface creation, `app launch`
    IPC). `waydroid app launch` silently no-ops if the session is not
    `RUNNING`, hence the poll. Note: `waydroid session status` is NOT
    a command — `session` only takes `start`/`stop`. Use `waydroid status`
    (top-level) and grep its output.
+
+   Two reasons for the long timeout + `setsid`: first-time Android
+   cold boot on a T480 routinely takes 60-120 s (much longer than the
+   30 s the script used to allow). And if rbx exits while the
+   background `session start` is still running, the launcher's job
+   table tears down weston too — the wayland socket vanishes mid-boot
+   and the LXC bind-mount of `/run/user/$UID/wayland-1` hard-fails
+   (visible in `/var/lib/waydroid/waydroid.log`). `setsid` for both
+   weston and `session start` keeps them alive across rbx exit, so a
+   timed-out launch leaves the system in a recoverable state instead
+   of needing a reboot.
 5. `exec waydroid app launch com.roblox.client`. Override the package
    via `$RBX_PKG`.
 
