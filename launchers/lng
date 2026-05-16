@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# lng — boot the LineageOS-style (Android-x86) VM for Roblox.
+# Mirrors stm/rbx/skl: stop TLP, drop swappiness, pin governor to
+# performance, then exec qemu under KVM.
+#
+# Resources are deliberately tight (Roblox is the only workload):
+#   4 vCPU, 4 GiB RAM, 8 GiB qcow2 disk (sparse).
+# The host iGPU (T480 UHD 620) is the real ceiling, not these numbers.
+set -euo pipefail
+
+VM_DIR="${LINEAGE_VM_DIR:-$HOME/lineage_vm}"
+DISK="$VM_DIR/disk.qcow2"
+ISO="$VM_DIR/android-x86.iso"
+RAM_MB=4096
+VCPUS=4
+
+# sysctl and cpupower live in /sbin and aren't on the user PATH, but they're
+# only invoked through sudo (which uses root's PATH). Only check tools that
+# this script calls directly.
+for cmd in qemu-system-x86_64 qemu-img sudo systemctl stat; do
+  command -v "$cmd" >/dev/null \
+    || { echo "error: $cmd not found in PATH — run install-lineage.sh" >&2; exit 1; }
+done
+[[ -e /dev/kvm ]] \
+  || { echo "error: /dev/kvm missing (BIOS virtualization disabled?)" >&2; exit 1; }
+[[ -s $DISK ]] \
+  || { echo "error: $DISK missing — run install-lineage.sh first" >&2; exit 1; }
+
+# Perf profile — identical to stm/rbx/skl. Skipped under LNG_DRY=1 because
+# the sudo calls would block on a password prompt in non-TTY contexts
+# (smoke tests, CI). The dry-run output below is the only thing tests
+# need; perf tweaks aren't observable from there anyway.
+if [[ ${LNG_DRY:-0} != 1 ]]; then
+  sudo systemctl stop tlp 2>/dev/null || true
+  sudo sysctl -q vm.swappiness=10
+  sudo cpupower frequency-set -q -g performance >/dev/null
+fi
+
+# On first boot the qcow2 is empty (~200 KB of metadata, no real data). Once
+# Android-x86 is installed to disk the file grows past a megabyte. We use
+# that file-size heuristic to decide whether to attach the install ISO and
+# bias GRUB toward the CD-ROM ('-boot order=dc'). After install, omitting
+# the cdrom prevents users from accidentally rebooting back into the
+# installer (which would wipe their guest setup).
+cdrom_args=()
+if (( $(stat -c%s "$DISK") < 1048576 )); then
+  [[ -s $ISO ]] \
+    || { echo "error: $ISO missing — run install-lineage.sh first" >&2; exit 1; }
+  cdrom_args=(-cdrom "$ISO" -boot order=dc,menu=on)
+  echo "First boot — booting from ISO. Pick 'Installation' in the GRUB menu."
+fi
+
+# LNG_DRY=1 prints the qemu command and exits without launching — used by
+# the install smoke test.
+qemu=(
+  qemu-system-x86_64
+  -enable-kvm -cpu host -smp "$VCPUS" -m "$RAM_MB"
+  -machine q35
+  -drive file="$DISK",if=virtio,format=qcow2,discard=unmap
+  -device virtio-vga-gl -display gtk,gl=on
+  -device virtio-tablet -device virtio-keyboard
+  -audiodev pa,id=snd0 -device intel-hda -device hda-output,audiodev=snd0
+  -netdev user,id=net0 -device virtio-net,netdev=net0
+  -name "LineageOS (Roblox VM)"
+  "${cdrom_args[@]}"
+)
+
+if [[ ${LNG_DRY:-0} == 1 ]]; then
+  printf '%q ' "${qemu[@]}"; echo
+  exit 0
+fi
+exec "${qemu[@]}"

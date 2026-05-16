@@ -219,6 +219,53 @@ Hard checks:
 Soft checks: waydroid-container running (installer stops it),
 sudo cached, stdin TTY, X11 vs Wayland session.
 
+## `install-lineage.sh` — QEMU/KVM + Android-x86 ISO + qcow2 disk
+
+Provisions the host side of the Roblox-only "LineageOS" VM that
+`launchers/lng` boots. Three actions, each idempotent:
+
+1. `apt-get install` `qemu-system-x86 qemu-system-gui qemu-utils ovmf`
+   — but only the missing ones (`dpkg-query` short-circuits the apt
+   round-trip and its sudo prompt when everything is already there).
+   `qemu-system-gui` is the load-bearing one: it ships the GTK display
+   and virgl renderer that `lng`'s `-display gtk,gl=on` needs.
+2. `curl` the Android-x86 9.0-r2 ISO (~700 MB, follows the SourceForge
+   mirror redirect) to `$LINEAGE_VM_DIR/android-x86.iso`. Skips if
+   already present and non-empty.
+3. `qemu-img create -f qcow2 … 8G` at `$LINEAGE_VM_DIR/disk.qcow2`.
+   qcow2 is sparse — the file is ~200 KB on disk until the guest
+   actually writes. Skips if a disk already exists.
+
+Modes: bare install, `--reinstall` (wipe disk+ISO then redo),
+`--uninstall` (wipe disk+ISO, keep QEMU packages), `--dry-run`.
+Hard preflights: `/dev/kvm` exists; `curl`/`sudo`/`apt-get`/`stat`
+on PATH.
+
+Why Android-x86 and not literal LineageOS: LineageOS ships no official
+x86_64 image — every desktop "LineageOS-style" build (Bliss OS,
+LineageOS-x86) forks the upstream Android-x86 project. 9.0-r2 is the
+newest stable Android-x86 release; Bliss OS would be the obvious
+LineageOS-derived alternative but is under a "temporary LOCKDOWN" as
+of 2026-05 with no fresh builds available.
+
+Env overrides:
+- `LINEAGE_ISO_URL=<https://...iso>` — swap in a fork build (drop a
+  Bliss OS URL here when their lockdown lifts).
+- `LINEAGE_VM_DIR=<path>` — install to a non-default directory
+  (default: `$HOME/lineage_vm`). The launcher honors the same var.
+
+Resource sizing is split between this script and `lng`:
+`DISK_SIZE` lives here (8 GB ceiling, sparse so it costs nothing
+until used); `RAM_MB` (4096) and `VCPUS` (4) live in `lng`.
+Deliberately tight — Roblox is the only workload, and the real perf
+ceiling is the host iGPU doing GL passthrough, not vCPU/RAM/disk.
+
+Post-install handoff: the script prints the GRUB-menu / partition /
+install-as-read-write / power-off-don't-reboot dance. Full step list
+in `/home/fred/lineage_vm/CLAUDE.md` (the VM data dir's own
+CLAUDE.md). Play Store is not bundled — sideload Roblox via APKMirror
+or pull it through Aurora Store inside the guest.
+
 ## `install-nic-tuning.sh` — permanent NIC tuning (zero power cost)
 
 Drops two artifacts plus the `nic-boost` launcher:

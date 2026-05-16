@@ -9,7 +9,7 @@ handful of games and apps that don't have first-class Linux delivery.
 
 ```
 installers/    install-*.sh, utils.sh, check-setup.sh   (one-shot setup)
-launchers/     stm, rbx                                  (per-run wrappers)
+launchers/     stm, rbx, lng                             (per-run wrappers)
 autostarts/    *.desktop                                 (XFCE autostart)
 backup.zshrc   reference copy of ~/.zshrc               (do not source)
 ```
@@ -26,16 +26,17 @@ Read those when working inside that subfolder; this file is just the map.
    the snap version with the official deb repo.
 4. Game/app installers as needed:
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
-   `install-roblox.sh` (run `check-roblox-prereqs.sh` first).
+   `install-roblox.sh` (run `check-roblox-prereqs.sh` first),
+   `install-lineage.sh` (Roblox-on-Android-x86 VM alternative).
    Each is independent.
 5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
    dispatcher tweaks (zero power cost) and deploys `nic-boost`
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
 6. Optional tmux persistence: `install-tmux-immortal.sh` adds tpm
    + tmux-resurrect + tmux-continuum so sessions survive reboots.
-7. `launchers/stm` and `launchers/rbx` go to `~/.local/bin/`. The
-   `skl` Minecraft launcher lives as a zsh alias, not a script — see
-   `backup.zshrc` for the exact line.
+7. `launchers/stm`, `launchers/rbx`, and `launchers/lng` go to
+   `~/.local/bin/`. The `skl` Minecraft launcher lives as a zsh alias,
+   not a script — see `backup.zshrc` for the exact line.
 8. `autostarts/*.desktop` go to `~/.config/autostart/`.
 
 ## Conventions every installer follows

@@ -89,6 +89,63 @@ alias rbx='~/install_roblox/rbx'
 
 (Or symlink `rbx` into `~/.local/bin/`; pick one.)
 
+## `lng` — LineageOS / Android-x86 VM launcher (Roblox)
+
+Boots the Roblox-only Android-x86 VM provisioned by
+`installers/install-lineage.sh`. Same perf profile as `stm`/`rbx`/`skl`,
+then a single `exec qemu-system-x86_64` under KVM.
+
+Order:
+
+1. Preflight: `qemu-system-x86_64`/`qemu-img`/`sudo`/`systemctl`/`stat`
+   on PATH; `/dev/kvm` present; `$LINEAGE_VM_DIR/disk.qcow2` exists.
+   Hard-fails loud — no silent fallback to TCG (would be unplayable).
+2. Apply the perf profile (TLP stop, swappiness, governor — same as
+   `stm`/`rbx`/`skl`). Skipped under `LNG_DRY=1` so the dry-run is
+   safe from a non-TTY context (sudo prompt would block).
+3. **First-boot ISO heuristic.** `stat -c%s disk.qcow2 < 1 MiB`
+   decides whether to attach `-cdrom $ISO -boot order=dc,menu=on`. A
+   fresh `qemu-img create -f qcow2 8G` is ~200 KB on disk; once the
+   guest installs Android-x86 the file grows past 1 MB long before
+   the first reboot. After install the cdrom is omitted entirely so
+   a stray reboot can't drop the user back into the Android-x86
+   installer GRUB (which would wipe the guest).
+4. `exec qemu-system-x86_64` with: `-cpu host -smp 4 -m 4096
+   -machine q35`; `virtio` disk with `discard=unmap` (lets the qcow2
+   shrink as the guest TRIMs); `virtio-vga-gl` + `-display gtk,gl=on`
+   for iGPU GL passthrough; `virtio-tablet` for absolute mouse
+   coordinates (relative-input on Android-x86 drifts); `intel-hda` +
+   `hda-output` over `-audiodev pa,…` (PipeWire's PulseAudio compat
+   layer); `virtio-net` user-mode NAT (no host port forwarding).
+
+Env knobs:
+- `LNG_DRY=1` — print the assembled qemu command and exit. Used by
+  the install smoke test and when tuning `-cpu`/`-smp`/resource flags.
+- `LINEAGE_VM_DIR=<path>` — point at a non-default VM directory
+  (default: `$HOME/lineage_vm`). The installer honors the same var.
+
+Resource sizing is split with the installer: `RAM_MB` (4096) and
+`VCPUS` (4) live here; `DISK_SIZE` (8 GB) lives in
+`install-lineage.sh`. Deliberately tight — Roblox is the only
+workload and the real perf ceiling is the iGPU doing GL passthrough.
+
+Non-obvious gotchas — do not reintroduce:
+
+- **Don't switch `-audiodev pa,…` to `-audiodev pipewire,…` without
+  testing.** Older qemu builds compile pipewire support out and the
+  failure mode is silent (no audio + no error). The `pa` driver
+  works against PipeWire's PulseAudio compat layer on this box.
+- **Don't drop the ISO heuristic for an always-on `-cdrom`.** That
+  lets a stray reboot land in the Android-x86 installer GRUB on a
+  pre-installed disk and wipe the guest. If a manual override is
+  needed, add an `LNG_FORCE_ISO=1` env var rather than tearing out
+  the heuristic.
+- **Graphics fallback is manual, not auto-detected.** If the guest
+  hangs at the splash, swap `-device virtio-vga-gl -display gtk,gl=on`
+  for `-device VGA -display gtk` (software rendering — Roblox tanks
+  but it boots). Don't auto-detect: the failure mode is "hang", which
+  isn't a clean signal.
+
 ## `nic-boost` — temporary WiFi/EEE perf boost
 
 Runtime-only NIC tweaks for bandwidth-heavy work. Deployed by
