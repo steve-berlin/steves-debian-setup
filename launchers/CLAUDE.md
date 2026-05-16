@@ -123,6 +123,34 @@ Env knobs:
   the install smoke test and when tuning `-cpu`/`-smp`/resource flags.
 - `LINEAGE_VM_DIR=<path>` — point at a non-default VM directory
   (default: `$HOME/lineage_vm`). The installer honors the same var.
+- `LNG_NO_AUTOSTART=1` — skip the ADB-driven Roblox autostart and just
+  drop you at Android's home screen (useful for guest maintenance).
+- `LNG_AUTOSTART_PKG=<pkg>` — override the package to launch (default
+  `com.roblox.client`).
+
+## `lng` ADB autostart
+
+After QEMU launches, `lng` backgrounds a watcher that polls
+`adb connect 127.0.0.1:5555` for ~180 s and, once the guest's package
+manager answers, `monkey`-launches the Roblox `LAUNCHER` intent. The
+QEMU netdev line forwards host loopback 5555 → guest 5555 explicitly
+for this. Best-effort by design: if the guest hasn't been installed
+yet (first boot), or ADB-over-network isn't enabled inside the guest,
+or Roblox isn't sideloaded, the loop times out cleanly and emits a
+single warning — the VM keeps running and you tap Roblox by hand.
+
+Guest-side one-time setup (do this inside the VM after sideloading
+Roblox — see `../lineage_vm/CLAUDE.md` for the full recipe):
+Settings → System → About → tap Build number 7× → Developer options
+→ enable USB debugging; then in any Android terminal app, run
+`setprop service.adb.tcp.port 5555 && stop adbd && start adbd`
+(persist across reboot by appending `persist.service.adb.tcp.port=5555`
+to `/system/build.prop`; needs the writable /system you picked at
+install time).
+
+`adb` lives in the `adb` Debian package and is pulled in by
+`install-lineage.sh`. If it's missing at launch time `lng` warns and
+skips the autostart — it doesn't hard-fail.
 
 Resource sizing is split with the installer: `RAM_MB` (4096) and
 `VCPUS` (4) live here; `DISK_SIZE` (8 GB) lives in

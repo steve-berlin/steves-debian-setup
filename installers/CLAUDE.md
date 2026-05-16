@@ -262,9 +262,11 @@ ceiling is the host iGPU doing GL passthrough, not vCPU/RAM/disk.
 
 Post-install handoff: the script prints the GRUB-menu / partition /
 install-as-read-write / power-off-don't-reboot dance. Full step list
-in `/home/fred/lineage_vm/CLAUDE.md` (the VM data dir's own
-CLAUDE.md). Play Store is not bundled — sideload Roblox via APKMirror
-or pull it through Aurora Store inside the guest.
+in `../lineage_vm/CLAUDE.md` (the deployed-state doc — covers
+first-boot install, Roblox sideload, ADB-over-network setup for
+autostart, gotchas, and an operations cheatsheet). Play Store is not
+bundled — sideload Roblox via APKMirror or pull it through Aurora
+Store inside the guest.
 
 ## `install-nic-tuning.sh` — permanent NIC tuning (zero power cost)
 

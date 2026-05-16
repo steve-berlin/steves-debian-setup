@@ -10,6 +10,7 @@ handful of games and apps that don't have first-class Linux delivery.
 ```
 installers/    install-*.sh, utils.sh, check-setup.sh   (one-shot setup)
 launchers/     stm, rbx, lng                             (per-run wrappers)
+lineage_vm/    CLAUDE.md                                 (Roblox-VM deployed-state docs)
 autostarts/    *.desktop                                 (XFCE autostart)
 backup.zshrc   reference copy of ~/.zshrc               (do not source)
 ```

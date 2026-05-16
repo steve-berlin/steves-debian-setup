@@ -13,6 +13,7 @@ DISK="$VM_DIR/disk.qcow2"
 ISO="$VM_DIR/android-x86.iso"
 RAM_MB=4096
 VCPUS=4
+ADB_HOST_PORT=5555
 
 # sysctl and cpupower live in /sbin and aren't on the user PATH, but they're
 # only invoked through sudo (which uses root's PATH). Only check tools that
@@ -25,6 +26,16 @@ done
   || { echo "error: /dev/kvm missing (BIOS virtualization disabled?)" >&2; exit 1; }
 [[ -s $DISK ]] \
   || { echo "error: $DISK missing — run install-lineage.sh first" >&2; exit 1; }
+
+# adb is only needed for the Roblox autostart. Warn but don't fail —
+# autostart is opt-out (LNG_NO_AUTOSTART=1), and the user may install
+# adb later or intentionally skip it.
+have_adb=1
+if ! command -v adb >/dev/null; then
+  have_adb=0
+  [[ ${LNG_NO_AUTOSTART:-0} != 1 ]] \
+    && echo "warning: 'adb' not on PATH — Roblox autostart will be skipped." >&2
+fi
 
 # Perf profile — identical to stm/rbx/skl. Skipped under LNG_DRY=1 because
 # the sudo calls would block on a password prompt in non-TTY contexts
@@ -60,7 +71,8 @@ qemu=(
   -device virtio-vga-gl -display gtk,gl=on
   -device virtio-tablet -device virtio-keyboard
   -audiodev pa,id=snd0 -device intel-hda -device hda-output,audiodev=snd0
-  -netdev user,id=net0 -device virtio-net,netdev=net0
+  -netdev user,id=net0,hostfwd=tcp:127.0.0.1:$ADB_HOST_PORT-:5555
+  -device virtio-net,netdev=net0
   -name "LineageOS (Roblox VM)"
   "${cdrom_args[@]}"
 )
@@ -69,4 +81,28 @@ if [[ ${LNG_DRY:-0} == 1 ]]; then
   printf '%q ' "${qemu[@]}"; echo
   exit 0
 fi
-exec "${qemu[@]}"
+
+# Background ADB autostart of Roblox. Best-effort: polls the forwarded
+# port for ~180 s, then `monkey`-launches the package via its LAUNCHER
+# intent. On first-boot (empty qcow2) or before ADB-over-network is
+# enabled inside the guest, it just times out cleanly — harmless.
+# Disable with LNG_NO_AUTOSTART=1; override the package with LNG_AUTOSTART_PKG.
+autostart_roblox() {
+  local pkg=${LNG_AUTOSTART_PKG:-com.roblox.client} host=127.0.0.1:$ADB_HOST_PORT
+  for _ in {1..60}; do
+    sleep 3
+    adb connect "$host" >/dev/null 2>&1 \
+      && adb -s "$host" shell pm list packages "$pkg" 2>/dev/null | grep -q "$pkg" \
+      && exec adb -s "$host" shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  done
+  echo "warning: Roblox autostart timed out — ADB-over-network enabled in guest?" >&2
+}
+
+if (( have_adb )) && [[ ${LNG_NO_AUTOSTART:-0} != 1 ]]; then
+  trap 'kill 0 2>/dev/null || true' EXIT
+  "${qemu[@]}" & qpid=$!
+  autostart_roblox &
+  wait "$qpid"
+else
+  exec "${qemu[@]}"
+fi

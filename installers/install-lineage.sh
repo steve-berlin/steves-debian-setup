@@ -18,7 +18,10 @@ ISO_URL=${LINEAGE_ISO_URL:-https://sourceforge.net/projects/android-x86/files/Re
 # qemu-system-gui ships the GTK display, virgl renderer (for virtio-vga-gl),
 # and PulseAudio/PipeWire backends. Without it the launcher's `-display gtk`
 # and `-audiodev pa` fail with "Unknown driver" — silently for audio.
-PKGS=(qemu-system-x86 qemu-system-gui qemu-utils ovmf)
+# adb is used by lng's optional Roblox autostart over the hostfwd'd port
+# 5555. lng degrades gracefully if it's missing, but installing it here
+# saves the user a second apt round-trip.
+PKGS=(qemu-system-x86 qemu-system-gui qemu-utils ovmf adb)
 
 DRY=0
 MODE=install   # install | uninstall | reinstall
@@ -113,8 +116,9 @@ install() {
 Done. Next steps:
   1. Run \`lng\` to boot the VM (ISO + blank disk).
   2. In the VM's GRUB menu pick 'Installation' (not the default 'Live').
-  3. Install Android-x86 to the virtio disk (sda) — see CLAUDE.md for
-     the partition / GRUB / ext4 prompts.
+  3. Install Android-x86 to the virtio disk (sda) — see
+     ~/steves_debian_setup/lineage_vm/CLAUDE.md for the partition /
+     GRUB / ext4 prompts.
   4. After install, power off. \`lng\` boots from disk on subsequent runs.
   5. Sideload the Roblox APK (Play Store is not bundled with Android-x86).
 EOF
