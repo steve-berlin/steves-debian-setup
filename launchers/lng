@@ -44,7 +44,7 @@ fi
 if [[ ${LNG_DRY:-0} != 1 ]]; then
   sudo systemctl stop tlp 2>/dev/null || true
   sudo sysctl -q vm.swappiness=10
-  sudo cpupower frequency-set -q -g performance >/dev/null
+  sudo cpupower frequency-set -g performance >/dev/null 2>&1
 fi
 
 # On first boot the qcow2 is empty (~200 KB of metadata, no real data). Once
