@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-lineage.sh — install QEMU/KVM, fetch an Android-x86 ISO, and
 # create an 8 GB qcow2 disk for the Roblox-only "LineageOS" VM that
-# `lng` (~/.local/bin/lng) launches.
+# `rbxvm` (~/.local/bin/rbxvm) launches.
 #
 # Why Android-x86, not literal LineageOS: LineageOS ships no official
 # x86_64 image. Android-x86 is the upstream that every desktop fork
@@ -18,8 +18,8 @@ ISO_URL=${LINEAGE_ISO_URL:-https://sourceforge.net/projects/android-x86/files/Re
 # qemu-system-gui ships the GTK display, virgl renderer (for virtio-vga-gl),
 # and PulseAudio/PipeWire backends. Without it the launcher's `-display gtk`
 # and `-audiodev pa` fail with "Unknown driver" — silently for audio.
-# adb is used by lng's optional Roblox autostart over the hostfwd'd port
-# 5555. lng degrades gracefully if it's missing, but installing it here
+# adb is used by rbxvm's optional Roblox autostart over the hostfwd'd port
+# 5555. rbxvm degrades gracefully if it's missing, but installing it here
 # saves the user a second apt round-trip.
 PKGS=(qemu-system-x86 qemu-system-gui qemu-utils ovmf adb)
 
@@ -31,7 +31,7 @@ usage() {
 Usage: $(basename "$0") [--reinstall|--uninstall] [--dry-run]
 
   (no flag)     Install QEMU+KVM, fetch ISO, create $DISK_SIZE qcow2 disk.
-                Launcher tuning: 4 vCPU, 4096 MB RAM (set in ~/.local/bin/lng).
+                Launcher tuning: 4 vCPU, 4096 MB RAM (set in ~/.local/bin/rbxvm).
   --reinstall   Remove VM disk + ISO, then install fresh.
   --uninstall   Remove VM disk + ISO. QEMU packages are kept.
   --dry-run     Print every action without changing the system. Combinable.
@@ -114,12 +114,12 @@ install() {
   cat <<EOF
 
 Done. Next steps:
-  1. Run \`lng\` to boot the VM (ISO + blank disk).
+  1. Run \`rbxvm\` to boot the VM (ISO + blank disk).
   2. In the VM's GRUB menu pick 'Installation' (not the default 'Live').
   3. Install Android-x86 to the virtio disk (sda) — see
      ~/steves_debian_setup/lineage_vm/CLAUDE.md for the partition /
      GRUB / ext4 prompts.
-  4. After install, power off. \`lng\` boots from disk on subsequent runs.
+  4. After install, power off. \`rbxvm\` boots from disk on subsequent runs.
   5. Sideload the Roblox APK (Play Store is not bundled with Android-x86).
 EOF
 }

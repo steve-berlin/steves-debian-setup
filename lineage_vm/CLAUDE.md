@@ -10,7 +10,7 @@ live elsewhere:
 | File                | Path                                                              |
 |---------------------|-------------------------------------------------------------------|
 | Installer           | `~/steves_debian_setup/installers/install-lineage.sh`             |
-| Launcher            | `~/.local/bin/lng`                                                |
+| Launcher            | `~/.local/bin/rbxvm`                                                |
 | Disk image          | `/home/fred/lineage_vm/disk.qcow2`  (8 GB ceiling, qcow2 sparse)  |
 | Install ISO         | `/home/fred/lineage_vm/android-x86.iso`  (~700 MB)                |
 
@@ -47,13 +47,13 @@ smoothness is the **host iGPU** (T480 UHD 620) doing GL passthrough via
   reasoning that sparse means raising the ceiling costs nothing on
   the host until the guest actually writes.
 
-Override at the source if needed: `RAM_MB` and `VCPUS` in `lng`,
+Override at the source if needed: `RAM_MB` and `VCPUS` in `rbxvm`,
 `DISK_SIZE` in `install-lineage.sh`.
 
 ## First-boot install dance
 
-1. `lng` boots the VM with `-cdrom android-x86.iso -boot order=dc`.
-   The CD is *only* attached on first boot — `lng` detects "no OS
+1. `rbxvm` boots the VM with `-cdrom android-x86.iso -boot order=dc`.
+   The CD is *only* attached on first boot — `rbxvm` detects "no OS
    installed yet" via `stat -c%s disk.qcow2 < 1 MiB` (a freshly created
    qcow2 is ~200 KB; once Android-x86 is installed it grows past a
    megabyte well before the first reboot).
@@ -64,8 +64,8 @@ Override at the source if needed: `RAM_MB` and `VCPUS` in `lng`,
    yes for writable so updates and app installs stick).
 4. Power the VM off (don't reboot — once you reboot inside Android, the
    installer's CD is still attached for *this* QEMU process; only
-   killing QEMU and re-running `lng` drops the ISO).
-5. `lng` on subsequent runs boots straight from disk. The ISO file
+   killing QEMU and re-running `rbxvm` drops the ISO).
+5. `rbxvm` on subsequent runs boots straight from disk. The ISO file
    stays in `/home/fred/lineage_vm` in case you want to `--reinstall`.
 
 ## Roblox install — Play Store is not bundled
@@ -82,13 +82,13 @@ runtime ceiling is the GL passthrough perf, not CPU/RAM.
 
 ## Boot-straight-into-Roblox via ADB autostart
 
-`lng` runs a best-effort ADB watcher after launching QEMU: it
+`rbxvm` runs a best-effort ADB watcher after launching QEMU: it
 `adb connect`s to host 5555 (forwarded by QEMU's `-netdev … hostfwd=…`
 to the guest's 5555), waits for the package manager, then sends
 `monkey -p com.roblox.client -c LAUNCHER 1`. End result: a few seconds
-after `lng` exits its startup, the Roblox loading screen is on
+after `rbxvm` exits its startup, the Roblox loading screen is on
 screen — no manual tap. If anything fails (guest not installed yet,
-ADB-over-network not enabled, Roblox not sideloaded), `lng` warns and
+ADB-over-network not enabled, Roblox not sideloaded), `rbxvm` warns and
 keeps the VM running so you can fix it.
 
 One-time guest-side setup to make autostart fire:
@@ -115,8 +115,8 @@ One-time guest-side setup to make autostart fire:
    step). Read-only `/system` makes the persist line silently no-op,
    so autostart works the same boot but breaks on the next.
 
-Skip autostart with `LNG_NO_AUTOSTART=1 lng`; override the package
-with `LNG_AUTOSTART_PKG=<pkg>` (e.g. to test against an alternate
+Skip autostart with `RBXVM_NO_AUTOSTART=1 rbxvm`; override the package
+with `RBXVM_AUTOSTART_PKG=<pkg>` (e.g. to test against an alternate
 build).
 
 ## Non-obvious gotchas — do not reintroduce
@@ -128,15 +128,15 @@ the parent `~/CLAUDE.md`.
   Replacing it with always-on `-cdrom` lets users accidentally pick
   "Installation" from GRUB on a subsequent boot and wipe their guest
   setup. Replacing it with no-`-cdrom` breaks the first-run install
-  path. If you want to expose a manual override, add an `LNG_FORCE_ISO=1`
+  path. If you want to expose a manual override, add an `RBXVM_FORCE_ISO=1`
   env var rather than tearing out the heuristic.
 - **Graphics path: `virtio-vga-gl` + `-display gtk,gl=on`**. This is
   what the host iGPU can actually accelerate. If Android-x86 hangs at
   the splash, the fallback is `-vga std -display gtk` (software
   rendering, no GL, watch Roblox tank). The fallback is not auto-
-  detected; you'd edit `lng` to swap the two `-device`/`-display`
+  detected; you'd edit `rbxvm` to swap the two `-device`/`-display`
   lines, or wire it up as an env override.
-- **Sudo:** `lng`'s `systemctl stop tlp` / `sysctl` / `cpupower`
+- **Sudo:** `rbxvm`'s `systemctl stop tlp` / `sysctl` / `cpupower`
   appear NOPASSWD on this box (same as `stm`/`rbx`). The installer's
   `apt-get` is **not** NOPASSWD — `install_pkgs()` checks
   `dpkg-query` first and only invokes `sudo apt-get` if a package is
@@ -154,7 +154,7 @@ the parent `~/CLAUDE.md`.
 - **`virtio-tablet`**: needed for absolute mouse positioning. Without
   it the guest pointer drifts because Android-x86's relative-input
   driver is rough.
-- **LNG_DRY=1**: prints the assembled qemu command without launching.
+- **RBXVM_DRY=1**: prints the assembled qemu command without launching.
   Used by the install smoke test and useful when tuning `-cpu`/`-smp`/
   resource flags.
 
@@ -165,10 +165,10 @@ the parent `~/CLAUDE.md`.
 ~/steves_debian_setup/installers/install-lineage.sh
 
 # Launch the VM:
-lng
+rbxvm
 
-# Inspect what qemu command lng would run, without launching:
-LNG_DRY=1 lng
+# Inspect what qemu command rbxvm would run, without launching:
+RBXVM_DRY=1 rbxvm
 
 # Try a Bliss OS build (once it returns) instead of Android-x86:
 LINEAGE_ISO_URL=https://.../BlissOS-x86_64.iso \

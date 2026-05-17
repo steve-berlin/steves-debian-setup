@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lng — boot the LineageOS-style (Android-x86) VM for Roblox.
+# rbxvm — boot the LineageOS-style (Android-x86) VM for Roblox.
 # Mirrors stm/rbx/skl: stop TLP, drop swappiness, pin governor to
 # performance, then exec qemu under KVM.
 #
@@ -28,20 +28,20 @@ done
   || { echo "error: $DISK missing — run install-lineage.sh first" >&2; exit 1; }
 
 # adb is only needed for the Roblox autostart. Warn but don't fail —
-# autostart is opt-out (LNG_NO_AUTOSTART=1), and the user may install
+# autostart is opt-out (RBXVM_NO_AUTOSTART=1), and the user may install
 # adb later or intentionally skip it.
 have_adb=1
 if ! command -v adb >/dev/null; then
   have_adb=0
-  [[ ${LNG_NO_AUTOSTART:-0} != 1 ]] \
+  [[ ${RBXVM_NO_AUTOSTART:-0} != 1 ]] \
     && echo "warning: 'adb' not on PATH — Roblox autostart will be skipped." >&2
 fi
 
-# Perf profile — identical to stm/rbx/skl. Skipped under LNG_DRY=1 because
+# Perf profile — identical to stm/rbx/skl. Skipped under RBXVM_DRY=1 because
 # the sudo calls would block on a password prompt in non-TTY contexts
 # (smoke tests, CI). The dry-run output below is the only thing tests
 # need; perf tweaks aren't observable from there anyway.
-if [[ ${LNG_DRY:-0} != 1 ]]; then
+if [[ ${RBXVM_DRY:-0} != 1 ]]; then
   sudo systemctl stop tlp 2>/dev/null || true
   sudo sysctl -q vm.swappiness=10
   sudo cpupower frequency-set -g performance >/dev/null 2>&1
@@ -61,7 +61,7 @@ if (( $(stat -c%s "$DISK") < 1048576 )); then
   echo "First boot — booting from ISO. Pick 'Installation' in the GRUB menu."
 fi
 
-# LNG_DRY=1 prints the qemu command and exits without launching — used by
+# RBXVM_DRY=1 prints the qemu command and exits without launching — used by
 # the install smoke test.
 qemu=(
   qemu-system-x86_64
@@ -77,7 +77,7 @@ qemu=(
   "${cdrom_args[@]}"
 )
 
-if [[ ${LNG_DRY:-0} == 1 ]]; then
+if [[ ${RBXVM_DRY:-0} == 1 ]]; then
   printf '%q ' "${qemu[@]}"; echo
   exit 0
 fi
@@ -86,9 +86,9 @@ fi
 # port for ~180 s, then `monkey`-launches the package via its LAUNCHER
 # intent. On first-boot (empty qcow2) or before ADB-over-network is
 # enabled inside the guest, it just times out cleanly — harmless.
-# Disable with LNG_NO_AUTOSTART=1; override the package with LNG_AUTOSTART_PKG.
+# Disable with RBXVM_NO_AUTOSTART=1; override the package with RBXVM_AUTOSTART_PKG.
 autostart_roblox() {
-  local pkg=${LNG_AUTOSTART_PKG:-com.roblox.client} host=127.0.0.1:$ADB_HOST_PORT
+  local pkg=${RBXVM_AUTOSTART_PKG:-com.roblox.client} host=127.0.0.1:$ADB_HOST_PORT
   for _ in {1..60}; do
     sleep 3
     adb connect "$host" >/dev/null 2>&1 \
@@ -98,7 +98,7 @@ autostart_roblox() {
   echo "warning: Roblox autostart timed out — ADB-over-network enabled in guest?" >&2
 }
 
-if (( have_adb )) && [[ ${LNG_NO_AUTOSTART:-0} != 1 ]]; then
+if (( have_adb )) && [[ ${RBXVM_NO_AUTOSTART:-0} != 1 ]]; then
   trap 'kill 0 2>/dev/null || true' EXIT
   "${qemu[@]}" & qpid=$!
   autostart_roblox &

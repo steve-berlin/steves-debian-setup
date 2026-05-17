@@ -9,7 +9,7 @@ handful of games and apps that don't have first-class Linux delivery.
 
 ```
 installers/    install-*.sh, utils.sh, check-setup.sh   (one-shot setup)
-launchers/     stm, rbx, lng                             (per-run wrappers)
+launchers/     stm, rbx, rbxvm                             (per-run wrappers)
 lineage_vm/    CLAUDE.md                                 (Roblox-VM deployed-state docs)
 autostarts/    *.desktop                                 (XFCE autostart)
 backup.zshrc   reference copy of ~/.zshrc               (do not source)
@@ -35,7 +35,7 @@ Read those when working inside that subfolder; this file is just the map.
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
 6. Optional tmux persistence: `install-tmux-immortal.sh` adds tpm
    + tmux-resurrect + tmux-continuum so sessions survive reboots.
-7. `launchers/stm`, `launchers/rbx`, and `launchers/lng` go to
+7. `launchers/stm`, `launchers/rbx`, and `launchers/rbxvm` go to
    `~/.local/bin/`. The `skl` Minecraft launcher lives as a zsh alias,
    not a script — see `backup.zshrc` for the exact line.
 8. `autostarts/*.desktop` go to `~/.config/autostart/`.

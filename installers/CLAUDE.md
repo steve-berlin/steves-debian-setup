@@ -222,13 +222,13 @@ sudo cached, stdin TTY, X11 vs Wayland session.
 ## `install-lineage.sh` — QEMU/KVM + Android-x86 ISO + qcow2 disk
 
 Provisions the host side of the Roblox-only "LineageOS" VM that
-`launchers/lng` boots. Three actions, each idempotent:
+`launchers/rbxvm` boots. Three actions, each idempotent:
 
 1. `apt-get install` `qemu-system-x86 qemu-system-gui qemu-utils ovmf`
    — but only the missing ones (`dpkg-query` short-circuits the apt
    round-trip and its sudo prompt when everything is already there).
    `qemu-system-gui` is the load-bearing one: it ships the GTK display
-   and virgl renderer that `lng`'s `-display gtk,gl=on` needs.
+   and virgl renderer that `rbxvm`'s `-display gtk,gl=on` needs.
 2. `curl` the Android-x86 9.0-r2 ISO (~700 MB, follows the SourceForge
    mirror redirect) to `$LINEAGE_VM_DIR/android-x86.iso`. Skips if
    already present and non-empty.
@@ -254,9 +254,9 @@ Env overrides:
 - `LINEAGE_VM_DIR=<path>` — install to a non-default directory
   (default: `$HOME/lineage_vm`). The launcher honors the same var.
 
-Resource sizing is split between this script and `lng`:
+Resource sizing is split between this script and `rbxvm`:
 `DISK_SIZE` lives here (8 GB ceiling, sparse so it costs nothing
-until used); `RAM_MB` (4096) and `VCPUS` (4) live in `lng`.
+until used); `RAM_MB` (4096) and `VCPUS` (4) live in `rbxvm`.
 Deliberately tight — Roblox is the only workload, and the real perf
 ceiling is the host iGPU doing GL passthrough, not vCPU/RAM/disk.
 

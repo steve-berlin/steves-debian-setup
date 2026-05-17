@@ -89,7 +89,7 @@ alias rbx='~/install_roblox/rbx'
 
 (Or symlink `rbx` into `~/.local/bin/`; pick one.)
 
-## `lng` — LineageOS / Android-x86 VM launcher (Roblox)
+## `rbxvm` — LineageOS / Android-x86 VM launcher (Roblox)
 
 Boots the Roblox-only Android-x86 VM provisioned by
 `installers/install-lineage.sh`. Same perf profile as `stm`/`rbx`/`skl`,
@@ -101,7 +101,7 @@ Order:
    on PATH; `/dev/kvm` present; `$LINEAGE_VM_DIR/disk.qcow2` exists.
    Hard-fails loud — no silent fallback to TCG (would be unplayable).
 2. Apply the perf profile (TLP stop, swappiness, governor — same as
-   `stm`/`rbx`/`skl`). Skipped under `LNG_DRY=1` so the dry-run is
+   `stm`/`rbx`/`skl`). Skipped under `RBXVM_DRY=1` so the dry-run is
    safe from a non-TTY context (sudo prompt would block).
 3. **First-boot ISO heuristic.** `stat -c%s disk.qcow2 < 1 MiB`
    decides whether to attach `-cdrom $ISO -boot order=dc,menu=on`. A
@@ -119,18 +119,18 @@ Order:
    layer); `virtio-net` user-mode NAT (no host port forwarding).
 
 Env knobs:
-- `LNG_DRY=1` — print the assembled qemu command and exit. Used by
+- `RBXVM_DRY=1` — print the assembled qemu command and exit. Used by
   the install smoke test and when tuning `-cpu`/`-smp`/resource flags.
 - `LINEAGE_VM_DIR=<path>` — point at a non-default VM directory
   (default: `$HOME/lineage_vm`). The installer honors the same var.
-- `LNG_NO_AUTOSTART=1` — skip the ADB-driven Roblox autostart and just
+- `RBXVM_NO_AUTOSTART=1` — skip the ADB-driven Roblox autostart and just
   drop you at Android's home screen (useful for guest maintenance).
-- `LNG_AUTOSTART_PKG=<pkg>` — override the package to launch (default
+- `RBXVM_AUTOSTART_PKG=<pkg>` — override the package to launch (default
   `com.roblox.client`).
 
-## `lng` ADB autostart
+## `rbxvm` ADB autostart
 
-After QEMU launches, `lng` backgrounds a watcher that polls
+After QEMU launches, `rbxvm` backgrounds a watcher that polls
 `adb connect 127.0.0.1:5555` for ~180 s and, once the guest's package
 manager answers, `monkey`-launches the Roblox `LAUNCHER` intent. The
 QEMU netdev line forwards host loopback 5555 → guest 5555 explicitly
@@ -149,7 +149,7 @@ to `/system/build.prop`; needs the writable /system you picked at
 install time).
 
 `adb` lives in the `adb` Debian package and is pulled in by
-`install-lineage.sh`. If it's missing at launch time `lng` warns and
+`install-lineage.sh`. If it's missing at launch time `rbxvm` warns and
 skips the autostart — it doesn't hard-fail.
 
 Resource sizing is split with the installer: `RAM_MB` (4096) and
@@ -166,7 +166,7 @@ Non-obvious gotchas — do not reintroduce:
 - **Don't drop the ISO heuristic for an always-on `-cdrom`.** That
   lets a stray reboot land in the Android-x86 installer GRUB on a
   pre-installed disk and wipe the guest. If a manual override is
-  needed, add an `LNG_FORCE_ISO=1` env var rather than tearing out
+  needed, add an `RBXVM_FORCE_ISO=1` env var rather than tearing out
   the heuristic.
 - **Graphics fallback is manual, not auto-detected.** If the guest
   hangs at the splash, swap `-device virtio-vga-gl -display gtk,gl=on`
