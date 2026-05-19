@@ -21,6 +21,20 @@
 #   - Disables the Baloo file indexer (keeps the libs so KDE apps that
 #     link against it still build, just stops the background daemon
 #     and the CPU/SSD churn).
+#   - Strips cosmetic packs (plasma-workspace-wallpapers,
+#     oxygen-icon-theme, oxygen-sounds) and Debian doc cruft
+#     (doc-debian, installation-guide-*).
+#   - Drops every l10n / hunspell / aspell / manpages-*-l10n / task-*-
+#     desktop package whose language code isn't en or de (keeps en_*
+#     and de_* variants). Keyboard layouts are untouched.
+#   - Rewrites /etc/locale.gen to en_US.UTF-8 + de_DE.UTF-8 only and
+#     reruns locale-gen.
+#   - Plasma config tweaks (per-user, via kwriteconfig6):
+#       * ksmserverrc loginMode=emptySession   (no session restore →
+#                                               saves 50-100 MB at login)
+#       * kdeglobals AnimationDurationFactor=0 (instant transitions)
+#       * dolphinrc Plugins=image-only         (no video/PDF thumbnail
+#                                               daemon spawns)
 #   - Installs plasma-discover-backend-flatpak + kde-config-flatpak so
 #     Discover can install Flatpaks; kde-config-plymouth for the boot-
 #     splash GUI module.
@@ -40,7 +54,7 @@ for a in "$@"; do
   case $a in
     --dry-run)      dry=1 ;;
     --no-bluetooth) no_bluetooth=1 ;;
-    -h|--help)      sed -n '2,32p' "$0"; echo "Usage: $0 [--dry-run] [--no-bluetooth]"; exit 0 ;;
+    -h|--help)      sed -n '2,48p' "$0"; echo "Usage: $0 [--dry-run] [--no-bluetooth]"; exit 0 ;;
     *) echo "error: unknown arg: $a" >&2; exit 2 ;;
   esac
 done
@@ -189,7 +203,24 @@ services_niche=(
   'phonon*-backend-vlc'
 )
 
-# 10. Bluetooth (opt-in via --no-bluetooth). Most laptops have BT
+# 10. Cosmetic packs — Breeze is the default icon theme / sound theme
+#     in Plasma, so the Oxygen alternates and the bundled wallpaper
+#     pack are pure disk overhead. ~150 MB total.
+cosmetics=(
+  plasma-workspace-wallpapers
+  oxygen-icon-theme
+  oxygen-sounds
+)
+
+# 11. Debian doc cruft — the installation guide stays around after the
+#     OS is on disk, and doc-debian is rarely opened. man pages stay
+#     (kept manpages, manpages-dev below in the language filter).
+debian_docs=(
+  doc-debian
+  'installation-guide-*'
+)
+
+# 12. Bluetooth (opt-in via --no-bluetooth). Most laptops have BT
 #     hardware worth keeping for headsets/peripherals; only nuke if
 #     you're certain you won't use it.
 bluetooth=( bluedevil bluez bluez-obexd blueman 'libbluetooth*' )
@@ -198,6 +229,7 @@ to_remove=(
   "${legacy[@]}" "${images[@]}" "${input[@]}"
   "${games[@]}" "${edu[@]}" "${utils[@]}"
   "${akonadi[@]}" "${plasma_addons[@]}" "${services_niche[@]}"
+  "${cosmetics[@]}" "${debian_docs[@]}"
 )
 (( no_bluetooth )) && to_remove+=( "${bluetooth[@]}" )
 
@@ -208,6 +240,46 @@ if (( ${#present[@]} == 0 )); then
 else
   printf '── removing %d packages ──\n' "${#present[@]}"
   run sudo apt purge --autoremove -y "${present[@]}"
+fi
+
+# --- language filter ------------------------------------------------------
+
+# Drop every l10n / hunspell / aspell / non-English manpages / Debian
+# language-task package whose code isn't en or de. Keyboard layouts
+# (kxkbrc / xkb-data) are untouched — this only touches system-wide
+# *language packs*, not input methods.
+echo "── language filter (keep en_*/de_*, drop the rest) ──"
+mapfile -t lang_cand < <(expand_installed \
+  'kde-l10n-*' \
+  'firefox-esr-l10n-*' 'thunderbird-l10n-*' \
+  'hunspell-*' 'aspell-*' 'myspell-*' \
+  'manpages-*' 'task-*-desktop')
+lang_drop=()
+for p in "${lang_cand[@]}"; do
+  case "$p" in
+    *-en|*-en-*|*english*) ;;                                     # keep English
+    *-de|*-de-*|*german*) ;;                                      # keep German
+    manpages|manpages-dev|manpages-posix|manpages-posix-dev) ;;   # base = English
+    *) lang_drop+=( "$p" ) ;;
+  esac
+done
+if (( ${#lang_drop[@]} )); then
+  printf '── dropping %d non-en/non-de language packages ──\n' "${#lang_drop[@]}"
+  run sudo apt purge --autoremove -y "${lang_drop[@]}"
+else
+  echo "skip: no non-en/non-de language packages installed"
+fi
+
+# /etc/locale.gen → en_US.UTF-8 + de_DE.UTF-8 only, then regenerate.
+echo "── /etc/locale.gen → en_US.UTF-8 + de_DE.UTF-8 ──"
+if (( dry )); then
+  printf 'DRY  rewrite /etc/locale.gen + sudo locale-gen\n'
+else
+  sudo tee /etc/locale.gen >/dev/null <<'EOF'
+en_US.UTF-8 UTF-8
+de_DE.UTF-8 UTF-8
+EOF
+  sudo locale-gen
 fi
 
 # --- service tweaks -------------------------------------------------------
@@ -223,6 +295,28 @@ elif command -v balooctl >/dev/null 2>&1; then
   run balooctl disable || true
 else
   echo "skip: no balooctl found (baloo not installed?)"
+fi
+
+# --- Plasma config tweaks (per-user, via kwriteconfig) -------------------
+
+# These edit ~/.config/* for the invoking user. Don't run this script
+# under sudo or the configs land in /root/.config. All reversible from
+# System Settings if you want any back.
+echo "── Plasma config tweaks ──"
+KW=""
+command -v kwriteconfig6 >/dev/null 2>&1 && KW=kwriteconfig6
+[[ -z $KW ]] && command -v kwriteconfig5 >/dev/null 2>&1 && KW=kwriteconfig5
+if [[ -n $KW ]]; then
+  # Empty session at every login (no restore of last session's apps).
+  run "$KW" --file ksmserverrc --group General --key loginMode emptySession
+  # Animations fire instantly (still visible, just 0-duration).
+  run "$KW" --file kdeglobals --group KDE --key AnimationDurationFactor 0
+  # Dolphin: keep image thumbnails, kill video/PDF/audio thumbnailers
+  # (those spawn ffmpegthumbs / poppler / taglib on every folder browse).
+  run "$KW" --file dolphinrc --group PreviewSettings --key Plugins \
+    "imagethumbnail,jpegthumbnail,svgthumbnail,exrthumbnail"
+else
+  echo "skip: no kwriteconfig6/5 on PATH"
 fi
 
 # --- additions ------------------------------------------------------------

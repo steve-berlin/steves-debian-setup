@@ -431,8 +431,33 @@ accepts shell globs *and* literal names; one apt purge call):
   plasma-vault (encrypted folders), okteta (hex editor), kfontview,
   kdf, kup-backup, kontrast, ksystemlog, kdebugsettings, and
   `'phonon*-backend-vlc'` (dead weight once vlc is gone)
+- **cosmetic packs**: `plasma-workspace-wallpapers`,
+  `oxygen-icon-theme`, `oxygen-sounds` (Breeze is the default; Oxygen
+  is legacy)
+- **Debian doc cruft**: `doc-debian`, `'installation-guide-*'`
 - **bluetooth (opt-in via `--no-bluetooth`)**: bluedevil, bluez,
   bluez-obexd, blueman, `'libbluetooth*'`
+
+Language filter (dynamic, separate from the static groups):
+enumerates installed `kde-l10n-*`, `firefox-esr-l10n-*`,
+`thunderbird-l10n-*`, `hunspell-*`, `aspell-*`, `myspell-*`,
+`manpages-*`, and `task-*-desktop` packages, keeps anything matching
+`*-en|*-en-*|*english*|*-de|*-de-*|*german*` (plus base `manpages` /
+`manpages-dev` / `manpages-posix*`), purges the rest. Keyboard
+layouts and `xkb-data` are untouched per repo convention — this is a
+language-pack purge, not an input-method purge. After the purge,
+rewrites `/etc/locale.gen` to just `en_US.UTF-8 UTF-8` + `de_DE.UTF-8
+UTF-8` and reruns `locale-gen`.
+
+Plasma config tweaks (per-user, via `kwriteconfig6` / fallback to
+`kwriteconfig5`) — runs after the package work, **must be invoked as
+the desktop user, NOT under sudo** or configs land in `/root/.config`:
+- `ksmserverrc` → `loginMode=emptySession` (no session restore;
+  saves 50–100 MB at every login)
+- `kdeglobals` → `AnimationDurationFactor=0` (instant transitions)
+- `dolphinrc` → `Plugins=imagethumbnail,jpegthumbnail,svgthumbnail,exrthumbnail`
+  (keeps image thumbnails, kills the ffmpegthumbs/poppler/taglib
+  spawns on every folder browse)
 
 Holds `kdeaccessibility` before any removes — otherwise the chained
 `apt autoremove --purge` at the end strips it as a transitive dep.
