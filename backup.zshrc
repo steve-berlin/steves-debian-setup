@@ -22,6 +22,7 @@ alias skl='sudo systemctl stop tlp;sudo sysctl vm.swappiness=10;sudo cpupower fr
 alias reboot="systemctl reboot"
 alias media="/usr/bin/media.sh"
 alias logoff='dbus-send --session --type=method_call --print-reply --dest=org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager.Logout uint32:1'
+alias poweroff="systemctl poweroff"
 
 nohup python3 wallchange.py > /dev/null 2>&1 &
 # Disable NVIDIA driver for better iGPU performance
