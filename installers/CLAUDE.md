@@ -351,6 +351,29 @@ treats `~/.config/lxqt/*.conf`, `~/.config/albert/albert.conf`, and
 the two `~/.config/autostart/*.desktop` entries as derived artifacts,
 not user state. Hand-edits to those files do not survive a rerun.
 
+## `debloat-xfce.sh` — strip XFCE after you've switched to another DE
+
+Parallel to `debloat-mx.sh` / `debloat-kde.sh`. Idempotent,
+`--dry-run`-able. Two hard-fail preflights:
+1. **Active session must NOT be XFCE.** Checks `$XDG_CURRENT_DESKTOP`
+   case-insensitively. Refuses if `*xfce*` — removing XFCE packages
+   while it's the live desktop kills the session.
+2. **XFCE must be installed somewhere.** Checks for `xfwm4`. Refuses
+   otherwise — a clean "0 packages" exit would mask a bad invocation.
+
+Removal groups:
+- **metas**: `xfce4`, `task-xfce-desktop`, `xfce4-goodies`
+- **core**: xfwm4, xfdesktop4, xfconf, xfce4-session, xfce4-settings,
+  xfce4-panel, xfce4-notifyd, xfce4-appfinder, xfce4-power-manager
+- **wildcards**: `'xfce4-*'`, `'libxfce4*'`, `'thunar-*'` — catches
+  the long tail of panel plugins (clipman/pulseaudio/whiskermenu/
+  statusnotifier/genmon/sensors/fsguard/netload/weather/...), goodies,
+  and the libxfce4* runtime libs
+- **apps**: thunar, mousepad, ristretto, parole, orage
+- **xubuntu**: `'xubuntu-*'` (no-op on Debian/MX; covered just in case)
+
+To bring XFCE back: `sudo apt install xfce4`.
+
 ## `debloat-mx.sh` — strip MX Linux bundled apps
 
 Companion script to a fresh MX install (preflights `/etc/mx-version`,

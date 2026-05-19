@@ -78,13 +78,16 @@ fi
 
 # expand_installed PAT [PAT ...] — print each installed package matching
 # the given dpkg-query selectors. Accepts shell globs ('foo-*') and
-# literal names. Silent on no-match so set -e doesn't fire on a
-# debloated system.
+# literal names. The trailing `|| true` is load-bearing: dpkg-query
+# exits 1 on a totally unknown package (one never installed on this
+# box), and with pipefail the awk pipe also fails, which under set -e
+# silently kills the loop after the first unknown selector. `|| true`
+# lets every pattern run.
 expand_installed() {
   local pat
   for pat in "$@"; do
     dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' "$pat" 2>/dev/null \
-      | awk '$1 == "installed" {print $2}'
+      | awk '$1 == "installed" {print $2}' || true
   done
   return 0
 }

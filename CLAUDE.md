@@ -34,7 +34,8 @@ Read those when working inside that subfolder; this file is just the map.
    Albert), `debloat-mx.sh` (strip MX-bundled apps + optional
    `--intel-only` for nvidia/nouveau purge), `debloat-kde.sh`
    (post-install KDE Plasma debloat — only runs if `plasma-desktop`
-   is installed). Each is independent.
+   is installed), `debloat-xfce.sh` (strip XFCE — only runs from a
+   non-XFCE session). Each is independent.
 5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
    dispatcher tweaks (zero power cost) and deploys `nic-boost`
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.

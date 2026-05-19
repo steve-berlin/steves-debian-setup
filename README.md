@@ -32,6 +32,7 @@ bash installers/install-roblox.sh          # interactive, prompts per step
 bash installers/install-lxqt.sh            # alt DE: LXQt + us/ru kbd + Albert
 bash installers/debloat-mx.sh --intel-only # strip MX-bundled apps + nvidia/nouveau purge
 bash installers/debloat-kde.sh             # post-install KDE Plasma debloat (needs plasma-desktop)
+bash installers/debloat-xfce.sh            # strip XFCE (run from a non-XFCE session)
 
 # 4. networking polish (permanent, zero power cost) — also deploys nic-boost
 bash installers/install-nic-tuning.sh
