@@ -133,6 +133,27 @@ if have xfconf-query; then
   done
 fi
 
+# 13b. KDE keybindings (Meta = Win; via kwriteconfig6/5). Mirrors the
+#      XFCE bindings above: Meta+K poweroff, Meta+L logout, Meta+Space
+#      toggles keyboard layout (xkb option, works once a 2nd layout is
+#      added in System Settings → Keyboard → Layouts). No-op if no KDE
+#      CLI tools on PATH. Apply needs a re-login or
+#      `kquitapp6 kglobalaccel && kglobalaccel6 &`.
+if have kwriteconfig6 || have kwriteconfig5; then
+  KW=$(command -v kwriteconfig6 || command -v kwriteconfig5)
+  KGS=kglobalshortcutsrc
+  # ksmserver session actions. Value format: "<active>,<default>,<displayname>".
+  # Halt Without Confirmation = poweroff with no dialog (matches XFCE Super+k).
+  # Log Out = the standard KDE logout dialog (logout/poweroff/reboot/cancel).
+  # Lock Session default is Meta+L; override so Meta+L lands on logout.
+  "$KW" --file "$KGS" --group ksmserver --key "Halt Without Confirmation" "Meta+K,none,Shut Down"
+  "$KW" --file "$KGS" --group ksmserver --key "Log Out"                   "Meta+L,Ctrl+Alt+Del,Log Out"
+  "$KW" --file "$KGS" --group ksmserver --key "Lock Session"              "none,Meta+L,Lock Session"
+  # Keyboard layout toggle via xkb option (matches install-lxqt.sh).
+  "$KW" --file kxkbrc --group Layout --key Options          "grp:win_space_toggle"
+  "$KW" --file kxkbrc --group Layout --key ResetOldOptions  true
+fi
+
 # 14. debloat — split out into its own script.
 #     Run separately:  bash installers/debloat-mx.sh [--intel-only]
 #     --intel-only also purges nvidia/nouveau (matches what used to live here).
