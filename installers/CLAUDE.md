@@ -348,6 +348,40 @@ treats `~/.config/lxqt/*.conf`, `~/.config/albert/albert.conf`, and
 the two `~/.config/autostart/*.desktop` entries as derived artifacts,
 not user state. Hand-edits to those files do not survive a rerun.
 
+## `debloat-kde.sh` — strip a Debian/MX KDE Plasma install
+
+Companion to a KDE install (won't run unless `plasma-desktop` is
+present — preflight aborts otherwise). Adapted from cl0v3r404's
+[Debloat-KDE-Plasma-Debian](https://github.com/cl0v3r404/Debloat-KDE-Plasma-Debian)
+(Spanish original); rewritten in English, extended for a thicker
+debloat, and made idempotent. Modes: bare, `--dry-run`. No
+`--uninstall` — by design; reinstall individual packages with
+`sudo apt install <pkg>`.
+
+Removal groups (each filtered through `installed_only` so re-runs are
+no-ops):
+- **legacy KDE apps**: konqueror+plugins, akregator, kmail/korganizer/
+  kaddressbook/kontact/kleopatra/kgpg, kdepim-runtime, kwrite, xterm,
+  dragonplayer/juk/elisa, goldendict-ng, debian-reference-common,
+  khelpcenter
+- **CJK/non-Latin input**: full fcitx + fcitx5 stack, mozc (+uim/utils),
+  anthy, ibus, xiterm+thai
+- **KDE games**: `kdegames` meta + 30+ individual game packages — meta
+  removal is the point, otherwise autoremove drags games back next time
+- **KDE edutainment**: `kde-edu` meta + cantor/kalzium/kstars/marble/etc.
+- **legacy/duplicate utilities**: kfind, kompare, kget, sweeper, k3b,
+  kjots/knotes, kruler/kcharselect/kcolorchooser, kbackup, kolourpaint
+- **images**: gimp (upstream's call; reinstall on demand)
+
+Holds `kdeaccessibility` before any removes — otherwise the chained
+`apt autoremove --purge` at the end strips it as a transitive dep.
+Adds `plasma-discover-backend-flatpak`, `kde-config-flatpak`, and
+`kde-config-plymouth` (each filtered through `available_only` so MX's
+slimmer repo set doesn't hard-fail when a package isn't carried).
+
+Re-runnable: `installed_only` + `available_only` mean a second run
+removes nothing and installs nothing on a debloated system.
+
 ## `setup_nordvpn.sh` — replace snap with official deb
 
 Removes any snap-installed nordvpn, runs the official install.sh,

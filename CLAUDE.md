@@ -31,7 +31,8 @@ Read those when working inside that subfolder; this file is just the map.
    `install-roblox.sh` (run `check-roblox-prereqs.sh` first),
    `install-lineage.sh` (Roblox-on-Android-x86 VM alternative),
    `install-lxqt.sh` (alternative DE: LXQt + bilingual keyboard +
-   Albert). Each is independent.
+   Albert), `debloat-kde.sh` (post-install KDE Plasma debloat — only
+   runs if `plasma-desktop` is installed). Each is independent.
 5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
    dispatcher tweaks (zero power cost) and deploys `nic-boost`
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
