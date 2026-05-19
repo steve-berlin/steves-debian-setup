@@ -36,8 +36,12 @@ bash installers/install-nic-tuning.sh
 # 5. optional: persist tmux sessions across reboots (tpm + resurrect + continuum)
 bash installers/install-tmux-immortal.sh
 
-# 6. drop launchers and autostarts in place
-install -m 755 launchers/stm launchers/rbx ~/.local/bin/
+# 6. optional: random NordVPN country rotation every 6h
+install -m 755 nord-job/nord-rand ~/.local/bin/
+crontab nord-job/nord-rand.cron      # see nord-job/CLAUDE.md for modes
+
+# 7. drop launchers and autostarts in place
+install -m 755 launchers/stm launchers/rbx launchers/rbxvm ~/.local/bin/
 cp autostarts/*.desktop ~/.config/autostart/
 ```
 
@@ -49,14 +53,16 @@ per-script details.
 
 ```
 installers/    install-*.sh, utils.sh, check-setup.sh, check-roblox-prereqs.sh
-launchers/     stm (Steam), rbx (Roblox/Waydroid), nic-boost (NIC perf)
+launchers/     stm (Steam), rbx (Roblox/Waydroid), rbxvm (Roblox VM), nic-boost
+lineage_vm/    deployed-state docs for the Roblox-on-Android-x86 VM
+nord-job/      nord-rand script + 6-hourly crontab snippet
 autostarts/    *.desktop for ~/.config/autostart
 backup.zshrc   reference copy of ~/.zshrc (do not source as-is)
 CLAUDE.md      orientation map for Claude Code
 ```
 
-`installers/`, `launchers/`, and `autostarts/` each have their own
-`CLAUDE.md` with per-file detail.
+`installers/`, `launchers/`, `autostarts/`, `lineage_vm/`, and
+`nord-job/` each have their own `CLAUDE.md` with per-file detail.
 
 ## Conventions
 

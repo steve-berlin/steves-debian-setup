@@ -1,0 +1,10 @@
+# nord-rand — rotate NordVPN to a random country (from `nordvpn countries`) every 6 hours.
+#
+# Install:  crontab nord-job/nord-rand.cron              (run from repo root; replaces your crontab)
+# List:     crontab -l
+# Remove:   crontab -r                                    (removes ALL your cron jobs)
+#
+# Field order: minute hour day-of-month month day-of-week command
+# 0 */6 * * *  =  at minute 0, every 6th hour, every day  →  00:00, 06:00, 12:00, 18:00
+
+0 */6 * * * /home/fred/.local/bin/nord-rand force >/dev/null 2>&1

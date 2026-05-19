@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#
+# nord-rand — connect NordVPN to a random country (any country the
+# NordVPN client lists as available).
+#
+# Usage:
+#   nord-rand              connect to a random country; skip if already connected
+#   nord-rand force        connect to a random country, even if already connected
+#   nord-rand setup        one-time NordVPN config (run once, after `nordvpn login`)
+#   nord-rand kill on|off  toggle the kill switch (off = plain internet allowed)
+#
+# Logs every action to ~/Desktop/nord-rand.log.
+
+set -euo pipefail
+
+LOG="${HOME}/Desktop/nord-rand.log"
+MAX_TRIES=5
+
+log() { printf '%s  %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
+
+connected() { nordvpn status 2>/dev/null | grep -q '^Status: Connected'; }
+
+# Pull the live country list from the NordVPN client. Strips ANSI colour
+# codes, separator dashes, and whitespace; tolerates either comma- or
+# whitespace-separated output across client versions.
+list_countries() {
+  nordvpn countries 2>/dev/null \
+    | sed -E 's/\x1b\[[0-9;]*[mK]//g' \
+    | tr -s ' \t,\r' '\n' \
+    | awk 'NF && !/^-+$/ && !/^$/'
+}
+
+connect_random() {
+  local pick
+  mapfile -t COUNTRIES < <(list_countries)
+  if (( ${#COUNTRIES[@]} == 0 )); then
+    log "fail: nordvpn countries returned an empty list (daemon down? not logged in?)"
+    return 1
+  fi
+  for ((i=1; i<=MAX_TRIES; i++)); do
+    pick="${COUNTRIES[RANDOM % ${#COUNTRIES[@]}]}"
+    log "try $i/$MAX_TRIES: $pick"
+    if nordvpn connect "$pick" >>"$LOG" 2>&1; then
+      log "ok: connected to $pick"
+      return 0
+    fi
+  done
+  log "fail: $MAX_TRIES attempts exhausted"
+  return 1
+}
+
+cmd_setup() {
+  nordvpn disconnect >/dev/null 2>&1 || true
+  nordvpn set technology NordLynx
+  nordvpn set firewall on
+  nordvpn set killswitch on
+  nordvpn set threatprotectionlite on
+  nordvpn set analytics off
+  nordvpn set autoconnect on
+  nordvpn set post-quantum on >/dev/null 2>&1 || true
+  log "setup: NordLynx + firewall + killswitch + threat-protection + autoconnect ON; analytics OFF"
+}
+
+cmd_kill() {
+  case "${1:-}" in
+    on)  nordvpn set killswitch on  >/dev/null; log "kill switch ON" ;;
+    off) nordvpn set killswitch off >/dev/null; log "kill switch OFF — plain internet allowed" ;;
+    *)   echo "usage: nord-rand kill on|off" >&2; exit 2 ;;
+  esac
+}
+
+case "${1:-rotate}" in
+  setup) cmd_setup ;;
+  kill)  shift; cmd_kill "$@" ;;
+  force) connect_random ;;
+  rotate)
+    if connected; then
+      log "skip: already connected"
+      exit 0
+    fi
+    connect_random
+    ;;
+  *) echo "usage: nord-rand [setup|kill on|off|force]" >&2; exit 2 ;;
+esac

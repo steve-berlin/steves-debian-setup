@@ -330,6 +330,24 @@ Decisions worth knowing:
   disk for marginal gain — resurrect's pane-content capture is not free
   on big scrollback. 15 min is the upstream default.
 
+## `install-lxqt.sh` — alternative DE: LXQt + bilingual keyboard + Albert
+
+Drops an `lxqt + sddm` desktop alongside XFCE (pick at SDDM login).
+Pre-seeds: bilingual us/ru keyboard (Meta+Space toggle), F5/F6
+brightness via `brightnessctl`, a bottom panel with FancyMenu in the
+left slot, Albert as the alt+space launcher, and an `xcape` autostart
+that turns a bare-Meta tap into `XF86LaunchA` so the menu opens on
+Super alone. Modes: bare, `--dry-run`. No `--uninstall` — purging
+LXQt while logged into LXQt is a recipe for a TTY-rescue session;
+recover by hand if needed.
+
+Albert comes from the upstream OBS repo (signed key under
+`/etc/apt/keyrings/albert.gpg`). Skipped if `albert` is already on
+PATH. Every config file is overwritten unconditionally — the script
+treats `~/.config/lxqt/*.conf`, `~/.config/albert/albert.conf`, and
+the two `~/.config/autostart/*.desktop` entries as derived artifacts,
+not user state. Hand-edits to those files do not survive a rerun.
+
 ## `setup_nordvpn.sh` — replace snap with official deb
 
 Removes any snap-installed nordvpn, runs the official install.sh,
