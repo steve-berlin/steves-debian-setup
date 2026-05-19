@@ -396,12 +396,15 @@ Companion to a KDE install (won't run unless `plasma-desktop` is
 present — preflight aborts otherwise). Adapted from cl0v3r404's
 [Debloat-KDE-Plasma-Debian](https://github.com/cl0v3r404/Debloat-KDE-Plasma-Debian)
 (Spanish original); rewritten in English, extended for a thicker
-debloat, and made idempotent. Modes: bare, `--dry-run`. No
+debloat (now covers PIM/Akonadi, Plasma widget addons, niche services
++ Baloo disable), and made idempotent. Modes: bare, `--dry-run`,
+`--no-bluetooth` (opt-in: also purges bluedevil/bluez/blueman; off by
+default because most laptops have BT hardware worth keeping). No
 `--uninstall` — by design; reinstall individual packages with
 `sudo apt install <pkg>`.
 
-Removal groups (each filtered through `installed_only` so re-runs are
-no-ops):
+Removal groups (each enumerated through `expand_installed`, which
+accepts shell globs *and* literal names; one apt purge call):
 - **legacy KDE apps**: konqueror+plugins, akregator, kmail/korganizer/
   kaddressbook/kontact/kleopatra/kgpg, kdepim-runtime, kwrite, xterm,
   dragonplayer/juk/elisa, goldendict-ng, debian-reference-common,
@@ -414,6 +417,22 @@ no-ops):
 - **legacy/duplicate utilities**: kfind, kompare, kget, sweeper, k3b,
   kjots/knotes, kruler/kcharselect/kcolorchooser, kbackup, kolourpaint
 - **images**: gimp (upstream's call; reinstall on demand)
+- **Akonadi PIM stack**: `'akonadi-*'` + `'kdepim-*'` wildcards plus
+  `mariadb-server` + `mariadb-server-core` + `default-mysql-server` —
+  Akonadi pulls a real RDBMS as a Recommends, and autoremove leaves it
+  behind. Without an explicit purge you keep a mariadb daemon running
+  forever serving nothing.
+- **Plasma extras**: `plasma-widgets-addons`, `plasma-runners-addons`,
+  `plasma-wallpapers-addons`, `plasma-dataengines-addons`,
+  `kdeplasma-addons` — slims the widget picker + KRunner menu and
+  stops background data-engine daemons. Panel/desktop/KWin untouched.
+- **services + niche**: kdeconnect (phone sync — reinstall with one
+  apt command if you actually use it), krdc/krfb (VNC client/server),
+  plasma-vault (encrypted folders), okteta (hex editor), kfontview,
+  kdf, kup-backup, kontrast, ksystemlog, kdebugsettings, and
+  `'phonon*-backend-vlc'` (dead weight once vlc is gone)
+- **bluetooth (opt-in via `--no-bluetooth`)**: bluedevil, bluez,
+  bluez-obexd, blueman, `'libbluetooth*'`
 
 Holds `kdeaccessibility` before any removes — otherwise the chained
 `apt autoremove --purge` at the end strips it as a transitive dep.
@@ -421,8 +440,14 @@ Adds `plasma-discover-backend-flatpak`, `kde-config-flatpak`, and
 `kde-config-plymouth` (each filtered through `available_only` so MX's
 slimmer repo set doesn't hard-fail when a package isn't carried).
 
-Re-runnable: `installed_only` + `available_only` mean a second run
-removes nothing and installs nothing on a debloated system.
+Service tweak (post-removal): runs `balooctl6 disable` (fallback to
+`balooctl` for KF5 systems) to turn off the Baloo file indexer.
+Doesn't purge `baloo-kf6` itself — KDE apps link against it — just
+stops the daemon, which recovers a chunk of CPU + ends SSD churn.
+Idempotent: disabling an already-disabled index is a no-op.
+
+Re-runnable: `expand_installed` returns the empty set on a fully-
+debloated box, so a second run removes nothing.
 
 ## `setup_nordvpn.sh` — replace snap with official deb
 

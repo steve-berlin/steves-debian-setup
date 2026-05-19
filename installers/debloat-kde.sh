@@ -3,30 +3,44 @@
 #
 # Adapted from https://github.com/cl0v3r404/Debloat-KDE-Plasma-Debian
 # (original by cl0v3r404, in Spanish). This version is English (US),
-# idempotent, dry-run-able, and extended for a more thorough debloat
-# (KDE games, edutainment, more legacy/duplicate utilities, kdepim).
+# idempotent, dry-run-able, and substantially extended.
 #
 # What it does:
 #   - Holds kdeaccessibility so apt autoremove doesn't pull it out as a
 #     side-effect of removing other kde-* packages.
-#   - apt remove --purge of: legacy KDE apps, non-Latin/CJK input
-#     methods, KDE games, KDE edutainment, duplicate/legacy utilities.
+#   - apt purge of: legacy KDE apps, non-Latin/CJK input methods, KDE
+#     games + games meta, KDE edutainment + edu meta, duplicate/legacy
+#     utilities, the entire Akonadi PIM stack (left orphaned once kmail
+#     /korganizer/etc. are gone — explicit purge stops mariadb-server
+#     and akonadiserver from lingering as a Recommends), Plasma extra
+#     widgets/runners/wallpapers/data-engines (slims the widget picker
+#     and stops the background data-engine daemons), and niche services
+#     /apps (kdeconnect, krdc/krfb VNC, plasma-vault, okteta, kfontview,
+#     kdf, kup-backup, kontrast, ksystemlog, kdebugsettings, the vlc
+#     phonon backends).
+#   - Disables the Baloo file indexer (keeps the libs so KDE apps that
+#     link against it still build, just stops the background daemon
+#     and the CPU/SSD churn).
 #   - Installs plasma-discover-backend-flatpak + kde-config-flatpak so
-#     Discover can install Flatpaks; kde-config-plymouth for the
-#     boot-splash GUI module.
-#   - apt autoremove --purge to sweep the deps.
+#     Discover can install Flatpaks; kde-config-plymouth for the boot-
+#     splash GUI module.
+#   - apt autoremove --purge to sweep the orphaned deps.
 #
 # Modes:
-#   (no flag)   Run the debloat.
-#   --dry-run   Print every apt command, mutate nothing.
+#   (no flag)        Run the debloat with default removals.
+#   --dry-run        Print every command, mutate nothing.
+#   --no-bluetooth   ALSO purge bluedevil/bluez/blueman. Opt-in because
+#                    most laptops have BT hardware worth keeping.
 
 set -euo pipefail
 
 dry=0
+no_bluetooth=0
 for a in "$@"; do
   case $a in
-    --dry-run) dry=1 ;;
-    -h|--help) sed -n '2,22p' "$0"; echo "Usage: $0 [--dry-run]"; exit 0 ;;
+    --dry-run)      dry=1 ;;
+    --no-bluetooth) no_bluetooth=1 ;;
+    -h|--help)      sed -n '2,32p' "$0"; echo "Usage: $0 [--dry-run] [--no-bluetooth]"; exit 0 ;;
     *) echo "error: unknown arg: $a" >&2; exit 2 ;;
   esac
 done
@@ -34,7 +48,7 @@ done
 run() { (( dry )) && printf 'DRY  %s\n' "$*" || "$@"; }
 
 # preflight
-for c in apt apt-mark apt-cache dpkg-query sudo; do
+for c in apt apt-mark apt-cache dpkg-query sudo awk; do
   command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
 done
 
@@ -48,13 +62,15 @@ if ! dpkg-query -W -f='${db:Status-Status}\n' plasma-desktop 2>/dev/null \
   exit 1
 fi
 
-# Filter a package list to those actually installed, so re-runs on a
-# half-debloated box don't make apt bail with "package not installed".
-installed_only() {
-  local p
-  for p in "$@"; do
-    dpkg-query -W -f='${db:Status-Status}\n' "$p" 2>/dev/null \
-      | grep -qx 'installed' && printf '%s\n' "$p"
+# expand_installed PAT [PAT ...] — print each installed package matching
+# the given dpkg-query selectors. Accepts shell globs ('foo-*') and
+# literal names. Silent on no-match so set -e doesn't fire on a
+# debloated system.
+expand_installed() {
+  local pat
+  for pat in "$@"; do
+    dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' "$pat" 2>/dev/null \
+      | awk '$1 == "installed" {print $2}'
   done
   return 0
 }
@@ -80,7 +96,8 @@ fi
 
 # --- removals -------------------------------------------------------------
 
-# 1. Legacy/redundant KDE apps from the upstream debloat list.
+# 1. Legacy/redundant KDE apps from the upstream debloat list + the rest
+#    of the kdepim suite (so the akonadi cleanup below is meaningful).
 legacy=(
   konqueror konq-plugins
   akregator kmail kaddressbook korganizer kontact kleopatra kgpg
@@ -137,15 +154,75 @@ utils=(
   ktimer sweeper k3b kbackup kolourpaint
 )
 
-to_remove=( "${legacy[@]}" "${images[@]}" "${input[@]}" \
-            "${games[@]}" "${edu[@]}" "${utils[@]}" )
-mapfile -t present < <(installed_only "${to_remove[@]}")
+# 7. Akonadi PIM stack — once kmail/korganizer/kontact/etc. are gone,
+#    the akonadi daemons and mysql/mariadb backend just burn RAM. apt
+#    autoremove will catch most of these, but mariadb-server is often
+#    pulled as a Recommends and lingers. Explicit purge stops that.
+akonadi=(
+  'akonadi-*'
+  'kdepim-*'
+  mariadb-server mariadb-server-core
+  default-mysql-server virtual-mysql-server
+)
+
+# 8. Plasma extras — addon packs from kde-standard. Removing them slims
+#    the widget picker, the runner menu, and stops the background data-
+#    engine daemons. Plasma itself (panel/desktop/window manager) is
+#    untouched.
+plasma_addons=(
+  plasma-widgets-addons plasma-runners-addons
+  plasma-wallpapers-addons plasma-dataengines-addons
+  kdeplasma-addons
+)
+
+# 9. Services + niche apps that ship with kde-standard but most users
+#    never open. kdeconnect is the controversial one — if you sync a
+#    phone, reinstall with `sudo apt install kdeconnect`. krdc/krfb
+#    are VNC client/server. plasma-vault is encrypted-folder support.
+#    phonon4qt[56]-backend-vlc is dead weight once vlc itself is gone.
+services_niche=(
+  kdeconnect
+  krdc krfb
+  plasma-vault
+  okteta kfontview kdf kup-backup
+  kontrast ksystemlog kdebugsettings
+  'phonon*-backend-vlc'
+)
+
+# 10. Bluetooth (opt-in via --no-bluetooth). Most laptops have BT
+#     hardware worth keeping for headsets/peripherals; only nuke if
+#     you're certain you won't use it.
+bluetooth=( bluedevil bluez bluez-obexd blueman 'libbluetooth*' )
+
+to_remove=(
+  "${legacy[@]}" "${images[@]}" "${input[@]}"
+  "${games[@]}" "${edu[@]}" "${utils[@]}"
+  "${akonadi[@]}" "${plasma_addons[@]}" "${services_niche[@]}"
+)
+(( no_bluetooth )) && to_remove+=( "${bluetooth[@]}" )
+
+mapfile -t present < <(expand_installed "${to_remove[@]}")
 
 if (( ${#present[@]} == 0 )); then
   echo "── nothing to remove (already debloated) ──"
 else
   printf '── removing %d packages ──\n' "${#present[@]}"
-  run sudo apt remove --purge -y "${present[@]}"
+  run sudo apt purge --autoremove -y "${present[@]}"
+fi
+
+# --- service tweaks -------------------------------------------------------
+
+# Disable the Baloo file indexer. Keeps the libs (KDE apps link against
+# them) but stops the background daemon — recovers ~5-15% CPU on a busy
+# session and ends the SSD churn. Idempotent: balooctl disable on an
+# already-disabled index is a no-op.
+echo "── disable baloo file indexer ──"
+if command -v balooctl6 >/dev/null 2>&1; then
+  run balooctl6 disable || true
+elif command -v balooctl >/dev/null 2>&1; then
+  run balooctl disable || true
+else
+  echo "skip: no balooctl found (baloo not installed?)"
 fi
 
 # --- additions ------------------------------------------------------------
@@ -167,6 +244,6 @@ run sudo apt autoremove --purge -y
 cat <<'EOF'
 
 ── done ──
-Reboot recommended (some KDE PIM services linger until session restart).
+Reboot recommended — Akonadi/Baloo daemons linger until session restart.
 To bring something back:  sudo apt install <pkg>
 EOF
