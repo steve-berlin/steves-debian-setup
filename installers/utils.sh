@@ -12,7 +12,8 @@ $S apt-get install -y --no-install-recommends \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
   tlp linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
-  xsel xfconf wmctrl gh
+  xsel xfconf wmctrl gh \
+  kate
 $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
   $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
 
@@ -132,24 +133,14 @@ if have xfconf-query; then
   done
 fi
 
-# 14. debloat (from ~/debloat-mx.sh + extras)
-$S apt-get purge --autoremove -y \
-  gimp mx-packageinstaller lo-main-helper \
-  strawberry gmtp deb-installer vlc qpdfview catfish xfburn asunder 2>/dev/null || true
-$S sudo apt-get purge -y --autoremove "^mx-updater.*"
-# NVIDIA + nouveau: running on iGPU, neither is needed
-$S apt-get purge --autoremove -y 'nvidia-*' 'libnvidia-*' xserver-xorg-video-nouveau 2>/dev/null || true
-# blacklist the nouveau kernel module so it doesn't load on boot
-$S tee /etc/modprobe.d/blacklist-nouveau.conf >/dev/null <<'EOF'
-blacklist nouveau
-options nouveau modeset=0
-EOF
-$S update-initramfs -u 2>/dev/null || true
+# 14. debloat — split out into its own script.
+#     Run separately:  bash installers/debloat-mx.sh [--intel-only]
+#     --intel-only also purges nvidia/nouveau (matches what used to live here).
 
 [ -f "$HOME/wallchange.py" ] || echo "[!] ~/wallchange.py missing (referenced by .zshrc)" >&2
 echo "[✓] done — run 'claude login' and 'nordvpn login'; log out/in for nordvpn group"
 echo "[!] rotate GH_TOKEN/ANTHROPIC_API_TOKEN in ~/.zshrc; line 2 points at /home/alex"
+echo "[i] next: bash installers/debloat-mx.sh --intel-only   # MX debloat + nvidia purge"
 
-# 15. EasyEffects stuff
-
+# 15. EasyEffects presets
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/JackHack96/EasyEffects-Presets/master/install.sh)"

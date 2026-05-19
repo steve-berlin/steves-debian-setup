@@ -12,9 +12,12 @@ on a Debian/Ubuntu box: apt packages, oh-my-zsh + plugins, fzf shell
 integration, user toolchains (rustup, rbenv, atuin, starship, nvm, deno,
 bun, pyenv), Go and neovim from upstream tarballs, third-party installers
 (brave, waydroid), pip tools, flatpak + Organic Maps, Claude Code,
-NordVPN, tmux config, helper scripts, XFCE keybindings, debloat, and
-EasyEffects presets. Numbered sections (1–15) match `check-setup.sh`'s
-verification order.
+NordVPN, tmux config, helper scripts, XFCE keybindings, and EasyEffects
+presets. Numbered sections (1–15) match `check-setup.sh`'s verification
+order; step 14 is intentionally a no-op stub — debloat moved out to
+`debloat-mx.sh` (run it separately with `--intel-only` for the old
+nvidia-purge behaviour). `kate` is in the apt install list because it's
+the user's go-to GUI editor (pulls Qt6 + KF6 deps; ~150 MB).
 
 Two known issues to fix in a future pass:
 - Line 2 hard-codes `/home/alex/.zsh/completions` in FPATH (left over
@@ -347,6 +350,45 @@ PATH. Every config file is overwritten unconditionally — the script
 treats `~/.config/lxqt/*.conf`, `~/.config/albert/albert.conf`, and
 the two `~/.config/autostart/*.desktop` entries as derived artifacts,
 not user state. Hand-edits to those files do not survive a rerun.
+
+## `debloat-mx.sh` — strip MX Linux bundled apps
+
+Companion script to a fresh MX install (preflights `/etc/mx-version`,
+hard-fails on vanilla Debian). Removes MX-specific bloat in seven
+groups: one-time welcome (`mx-welcome`/`mx-tour`), misc
+(`mx-updater`, `mx-packageinstaller*`, `mx-viewer` ["MX browser"],
+`mx-flash`, `mx-codecs`), settings GUIs that duplicate XFCE Settings
+(`mx-keyboard`/`mx-locale`/`mx-date-time`/`mx-user`/`mx-menu-editor`/
+`mx-system-keyboard*`), niche network helpers (`mx-rsync`,
+`mx-samba-config`, `mx-find-shares`, `mx-network-assistant`,
+`mx-service-manager`), theme/sound packs
+(`mx-artwork`, `mx-faenza-icons`, `mx-select-sound`,
+`mx-system-sounds`, `mx-quick-system-info`), `mx-comp-mgr`
+(irrelevant once you switch to KDE), and heavyweights from the old
+`utils.sh` step 14 (`gimp`, `vlc*`, `libreoffice-*`, `strawberry`,
+`gmtp`, `deb-installer`, `qpdfview`, `catfish`, `lo-main-helper`).
+Also strips all CD/DVD burning/ripping apps (`xfburn`, `asunder`,
+`brasero*`, `k3b*`, `xcdroast`, `gnomebaker`, `mybashburn`).
+
+Mx-* packages NOT touched (still useful): `mx-tools`, `mx-snapshot`,
+`mx-cleanup`, `mx-tweak`, `mx-repo-manager`, `mx-iso-dump`,
+`mx-software-defaults`, `mx-default-settings`, `mx-keyring`.
+
+Opt-in (commented-out `optional=()` array in the script): `mx-conky`
+(only if you run Conky), `mxlive-usb-maker` (redundant with
+`mx-iso-dump`), `mx-remastercc`, `mx-installer`.
+
+Modes: bare, `--dry-run`, `--intel-only` (also purges
+`nvidia-*`/`libnvidia-*`/`xserver-xorg-video-nouveau` and writes
+`/etc/modprobe.d/blacklist-nouveau.conf` + reruns `update-initramfs`
+— matches the old `utils.sh` step 14 behaviour for Intel-iGPU
+laptops).
+
+Implementation note: a single `expand_installed` helper accepts both
+literal package names and shell globs (e.g. `'libreoffice-*'`,
+`'mx-packageinstaller*'`), enumerates them via `dpkg-query` selectors,
+and filters down to installed-only — so re-runs on a debloated box
+are no-ops and one apt invocation handles everything.
 
 ## `debloat-kde.sh` — strip a Debian/MX KDE Plasma install
 
