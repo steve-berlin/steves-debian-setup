@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh install-tmux-immortal.sh` — uses bashisms.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # install-tmux-immortal.sh — make tmux sessions survive reboots.
 # tpm + tmux-resurrect + tmux-continuum, plus an autostart that boots
 # a detached tmux server on login so continuum's auto-restore fires.

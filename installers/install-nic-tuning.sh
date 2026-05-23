@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh install-nic-tuning.sh` — uses bashisms.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # install-nic-tuning.sh — NIC tuning for speed & stability.
 # Target: ThinkPad T480 (Intel I219-LM eth + Intel 8265 wifi) on Debian/MX
 # with NetworkManager. Idempotent; degrades to warn on other hardware.

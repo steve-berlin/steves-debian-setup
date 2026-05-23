@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh debloat-mx.sh` — the script uses
+# `[[`, bash arrays, and `mapfile`, all of which dash treats as syntax
+# errors. The POSIX `[ -z ... ]` test parses under either shell.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
+
 # debloat-mx.sh — strip an MX Linux install of bundled apps you don't want.
 #
 # Parallel to debloat-kde.sh. Idempotent, --dry-run-able, hard-fails on

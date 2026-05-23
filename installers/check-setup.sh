@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh check-setup.sh` — uses `[[` and `${var,,}`.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # Verify install-deps.sh ran successfully. Exit 0 if all OK, 1 if any FAIL.
 set -u
 P=0; F=0

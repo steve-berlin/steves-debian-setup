@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh install-anki.sh` — uses `[[` and `(( ))`.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # install-anki.sh — install/uninstall Anki from the official upstream tarball.
 #
 # Why this exists: Debian's `anki` package lags upstream by years. Anki's

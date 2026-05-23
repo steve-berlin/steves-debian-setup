@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh utils.sh` — uses `(( ))` and arrays.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # Resolve all dependencies referenced by ~/.zshrc on Debian/Ubuntu. Idempotent.
 # --dry-run prints actions, mutates nothing.
 set -euo pipefail

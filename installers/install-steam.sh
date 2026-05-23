@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh install-steam.sh` — uses bashisms.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # install-steam.sh — install/uninstall Steam from the official apt package.
 #
 # Why this exists: Steam ships its own deb but it lives in `non-free` (Debian)

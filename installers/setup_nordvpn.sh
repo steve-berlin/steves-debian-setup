@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh setup_nordvpn.sh` — uses `[[` and `(( ))`.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # setup_nordvpn.sh — replace any snap-installed nordvpn with the official
 # deb-repo build and enroll the user in the nordvpn group.
 #

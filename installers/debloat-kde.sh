@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh debloat-kde.sh` — uses `[[`, arrays, mapfile.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 # debloat-kde.sh — strip Debian/MX KDE Plasma down to a working desktop.
 #
 # Adapted from https://github.com/cl0v3r404/Debloat-KDE-Plasma-Debian
