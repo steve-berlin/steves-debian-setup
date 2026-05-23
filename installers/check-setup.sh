@@ -42,10 +42,7 @@ cf "$HOME/.nvim/bin/nvim"
 have brave-browser && ok "brave"    || bad "brave missing"
 have waydroid      && ok "waydroid" || bad "waydroid missing"
 
-# 7. LazyVim + app repos
-cd_ "$HOME/.config/nvim"
-cd_ "$HOME/wallChange"
-cd_ "$HOME/clockApp"
+# 7. LazyVim + app repos — utils.sh step 8 is commented out; skip the checks.
 
 # 8. pip tools
 for p in yt-dlp tldr platformio; do cbin "$p"; done
@@ -69,8 +66,10 @@ for f in "$HOME/.local/bin/clear-clipboard" "$HOME/.local/bin/focus-nth"; do
   [ -x "$f" ] && ok "exec $f" || bad "exec $f missing/not-executable"
 done
 
-# 13. XFCE keybindings
-if have xfconf-query; then
+# 13. XFCE keybindings — only check on an XFCE session (utils.sh skips
+#     them otherwise via `have xfconf-query`).
+sess=${XDG_CURRENT_DESKTOP:-}
+if have xfwm4 && have xfconf-query && [[ ${sess,,} == *xfce* ]]; then
   xk() {
     local got; got=$(xfconf-query -c xfce4-keyboard-shortcuts -p "$1" 2>/dev/null || true)
     [ "$got" = "$2" ] && ok "xfce $1" || bad "xfce $1 = '$got' (want '$2')"
@@ -84,8 +83,29 @@ if have xfconf-query; then
   for i in 1 2 3 4 5 6 7 8 9; do
     xk "/commands/custom/<Super>$i" "$HOME/.local/bin/focus-nth $i"
   done
-else
-  bad "xfconf-query missing — can't verify keybindings"
+fi
+
+# 13b. KDE keybindings — mirrors utils.sh step 13b. Only check on a KDE
+#      session (kreadconfig6/5 fall back through gracefully if unavailable).
+if [[ ${sess,,} == *kde* ]] && { have kreadconfig6 || have kreadconfig5; }; then
+  KR=$(command -v kreadconfig6 || command -v kreadconfig5)
+  KGS=kglobalshortcutsrc
+  kk() {
+    # kk <file> <group> <key> <want-prefix>
+    # match by prefix because Plasma rewrites the value as
+    # "<active>\t<default>\t<displayname>" — only the active binding is
+    # what utils.sh asserts.
+    local got want_pre
+    got=$("$KR" --file "$1" --group "$2" --key "$3" 2>/dev/null || true)
+    want_pre="$4"
+    case "$got" in
+      "$want_pre"*) ok "kde $1[$2][$3] starts with '$want_pre'" ;;
+      *)            bad "kde $1[$2][$3] = '$got' (want prefix '$want_pre')" ;;
+    esac
+  }
+  kk "$KGS"  ksmserver "Halt Without Confirmation" "Meta+K"
+  kk "$KGS"  ksmserver "Log Out"                   "Meta+L"
+  kk  kxkbrc Layout    Options                     "grp:win_space_toggle"
 fi
 
 # 14. debloat — should be GONE
