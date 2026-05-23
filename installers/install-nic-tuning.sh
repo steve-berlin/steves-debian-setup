@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# ethtool/sysctl live in /usr/sbin; interactive bash on Debian doesn't put
+# sbin dirs on a non-root user's PATH, so `command -v` misses them.
+PATH=$PATH:/usr/sbin:/sbin
+
 SYSCTL=/etc/sysctl.d/99-nic-tuning.conf
 DISPATCHER=/etc/NetworkManager/dispatcher.d/99-nic-tuning
 LAUNCHER_DST=$HOME/.local/bin/nic-boost
