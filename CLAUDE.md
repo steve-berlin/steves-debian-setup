@@ -9,6 +9,7 @@ handful of games and apps that don't have first-class Linux delivery.
 
 ```
 installers/    install-*.sh, utils.sh, check-setup.sh   (one-shot setup)
+installers/discontinued/  no-longer-recommended scripts (Roblox/Lineage/LXQt/XFCE)
 launchers/     stm, rbx, rbxvm, nic-boost               (per-run wrappers)
 lineage_vm/    CLAUDE.md                                 (Roblox-VM deployed-state docs)
 nord-job/      nord-rand + nord-rand.cron               (6-hourly NordVPN rotation)
@@ -28,14 +29,15 @@ Read those when working inside that subfolder; this file is just the map.
    the snap version with the official deb repo.
 4. Game/app installers as needed:
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
-   `install-roblox.sh` (run `check-roblox-prereqs.sh` first),
-   `install-lineage.sh` (Roblox-on-Android-x86 VM alternative),
-   `install-lxqt.sh` (alternative DE: LXQt + bilingual keyboard +
-   Albert), `debloat-mx.sh` (strip MX-bundled apps + optional
-   `--intel-only` for nvidia/nouveau purge), `debloat-kde.sh`
-   (post-install KDE Plasma debloat — only runs if `plasma-desktop`
-   is installed), `debloat-xfce.sh` (strip XFCE — only runs from a
-   non-XFCE session). Each is independent.
+   `debloat-mx.sh` (strip MX-bundled apps + optional `--intel-only`
+   for nvidia/nouveau purge), `debloat-kde.sh` (post-install KDE
+   Plasma debloat — only runs if `plasma-desktop` is installed).
+   Each is independent. Roblox (`install-roblox.sh` +
+   `check-roblox-prereqs.sh`), the Android-x86 VM alternative
+   (`install-lineage.sh`), the LXQt alt DE (`install-lxqt.sh`), and
+   the XFCE-purge counterpart (`debloat-xfce.sh`) all moved to
+   `installers/discontinued/` — see that folder's `CLAUDE.md` for
+   the technical notes.
 5. Networking polish: `install-nic-tuning.sh` drops sysctl + NM
    dispatcher tweaks (zero power cost) and deploys `nic-boost`
    to `~/.local/bin/` for opt-in WiFi/EEE temporary boosts.
@@ -51,12 +53,15 @@ Read those when working inside that subfolder; this file is just the map.
 
 ## Conventions every installer follows
 
+- `#!/usr/bin/env bash` shebang, followed by a `[ -z "${BASH_VERSION:-}" ]`
+  guard that re-execs under bash. Catches `sh installers/foo.sh` invocations
+  before dash trips over `[[`, arrays, or `(( ))` with cryptic errors.
 - `set -euo pipefail` at the top, no exceptions.
 - `--dry-run` prints actions, mutates nothing. Combinable with other modes.
 - Idempotent: re-running on an already-installed box is a no-op, not an error.
 - No credentials, no scraping behind logins, no `curl | sudo bash` of
   unaudited third parties (waydroid_script is the one exception, vendored
-  under `~/install_roblox/waydroid_script/`).
+  under `~/install_roblox/waydroid_script/` by the discontinued Roblox installer).
 - Hard-fail loud on missing deps in a `preflight` block; never silently skip.
 - Sudo is called inline, never via a script-wide re-exec. The user sees
   every privileged action.
@@ -77,4 +82,4 @@ game *content* lives on `/games/steam`.
 - The Roblox APK, Waydroid system image, Steam game data, Minecraft
   worlds — all bulky and fetched on demand by the installers/launchers.
 - `~/install_roblox/waydroid_script/` and `~/install_roblox/venv/` —
-  cloned/created by `install-roblox.sh` at runtime.
+  cloned/created at runtime by the discontinued `install-roblox.sh`.
