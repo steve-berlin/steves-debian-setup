@@ -31,9 +31,10 @@ backup.zshrc   reference copy of ~/.zshrc               (do not source)
    the snap version with the official deb repo.
 4. Game/app installers as needed:
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
-   `debloat-mx.sh` (strip MX-bundled apps + optional `--intel-only`
-   for nvidia/nouveau purge), `debloat-kde.sh` (post-install KDE
-   Plasma debloat — only runs if `plasma-desktop` is installed).
+   `debloat-mx.sh` (strip MX-bundled apps), `debloat-nvidia.sh`
+   (purge nvidia/nouveau on Intel-iGPU-only boxes), `debloat-kde.sh`
+   (post-install KDE Plasma debloat — only runs if `plasma-desktop`
+   is installed).
    Each is independent. Roblox (`install-roblox.sh` +
    `check-roblox-prereqs.sh`), the Android-x86 VM alternative
    (`install-lineage.sh`), the LXQt alt DE (`install-lxqt.sh`), and
@@ -110,8 +111,8 @@ bun, pyenv), Go and neovim from upstream tarballs, third-party installers
 NordVPN, tmux config, helper scripts, XFCE + KDE keybindings, and
 EasyEffects presets. Numbered sections (1–15) match `check-setup.sh`'s
 verification order; step 14 is intentionally a no-op stub — debloat
-moved out to `debloat-mx.sh` (run it separately with `--intel-only` for
-the old nvidia-purge behaviour). `--dry-run` prints every action without
+moved out to `debloat-mx.sh` (general MX bloat) and `debloat-nvidia.sh`
+(the old nvidia-purge behaviour). `--dry-run` prints every action without
 mutating; for the curl-piped third-party installers and the `cat >
 heredoc` helper-script writes it prints a short summary instead of
 trying to render the whole pipe.
@@ -287,17 +288,35 @@ Opt-in (commented-out `optional=()` array in the script): `mx-conky`
 (only if you run Conky), `mxlive-usb-maker` (redundant with
 `mx-iso-dump`), `mx-remastercc`, `mx-installer`.
 
-Modes: bare, `--dry-run`, `--intel-only` (also purges
-`nvidia-*`/`libnvidia-*`/`xserver-xorg-video-nouveau` and writes
-`/etc/modprobe.d/blacklist-nouveau.conf` + reruns `update-initramfs`
-— matches the old `utils.sh` step 14 behaviour for Intel-iGPU
-laptops).
+Modes: bare, `--dry-run`. For the nvidia/nouveau purge that used to
+live behind `--intel-only`, run the sibling `debloat-nvidia.sh`.
 
 Implementation note: a single `expand_installed` helper accepts both
 literal package names and shell globs (e.g. `'libreoffice-*'`,
 `'mx-packageinstaller*'`), enumerates them via `dpkg-query` selectors,
 and filters down to installed-only — so re-runs on a debloated box
 are no-ops and one apt invocation handles everything.
+
+### `debloat-nvidia.sh` — purge nvidia + nouveau (Intel-iGPU-only boxes)
+
+Standalone counterpart to the old `debloat-mx.sh --intel-only` flow.
+Purges `nvidia-*` / `libnvidia-*` / `xserver-xorg-video-nouveau`, writes
+`/etc/modprobe.d/blacklist-nouveau.conf` (`blacklist nouveau` +
+`options nouveau modeset=0`), reruns `update-initramfs -u`. Saves
+~500 MB and frees the iGPU from sharing DRM contention with an unused
+nouveau probe at boot.
+
+Modes: bare, `--dry-run`, `--uninstall` (removes the blacklist file
+only — drivers themselves untouched; reinstall with apt as needed).
+
+Hard-fail preflight: refuses to run if `lspci -nn -d ::0300/0302/0380`
+reports an NVIDIA GPU — purging drivers on a box that actually has a
+discrete card drops X to llvmpipe or hangs at boot. No override flag
+by design; if you genuinely know better, edit the script.
+
+Shares the `expand_installed` glob/literal helper pattern with
+`debloat-mx.sh` and `debloat-kde.sh`. Idempotent: a fully-purged box
+re-runs as a no-op.
 
 ### `debloat-kde.sh` — strip a Debian/MX KDE Plasma install
 
