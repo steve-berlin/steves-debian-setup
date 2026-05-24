@@ -30,6 +30,7 @@ backup.zshrc   reference copy of ~/.zshrc               (do not source)
 3. `setup_nordvpn.sh` — only if you want NordVPN; replaces snap with deb repo.
 4. Game/app installers as needed (each independent):
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
+   `install-scrcpy.sh` (Android screen-mirror for rbxvm/Waydroid),
    `debloat-mx.sh`, `debloat-nvidia.sh` (Intel-iGPU-only boxes),
    `debloat-kde.sh` (only if `plasma-desktop` is installed).
    Discontinued: `install-roblox.sh`, `check-roblox-prereqs.sh`,
@@ -156,6 +157,41 @@ Layout: `/usr/local/bin/anki` (root, launcher), `/usr/local/share/anki/`
 (root, launcher + bundled uninstaller), `~/.local/share/Anki2/` (user,
 profiles/decks/media — safe), `~/.cache/Anki2/` (user, downloaded real
 app, regeneratable).
+
+### `install-scrcpy.sh` — upstream scrcpy, shadowing distro under /usr/local
+
+Debian's `scrcpy` lags upstream by 6-12 months and misses v3 features
+(virtual-display, audio passthrough, camera mirroring) that pair with
+the `rbxvm` and Waydroid workflows. Fetches the prebuilt
+`scrcpy-linux-x86_64-vX.Y.Z.tar.gz` from Genymobile's GitHub releases
+and installs into `/usr/local/share/scrcpy/` with a thin wrapper at
+`/usr/local/bin/scrcpy`. `/usr/local/bin` precedes `/usr/bin` on default
+Debian PATH so the upstream binary wins. Modes: bare, `--reinstall`,
+`--uninstall`, `--dry-run`.
+
+Decisions:
+- **Runtime deps via `apt install scrcpy`.** The distro package's
+  Depends list covers `adb`, `libav*`, `libsdl2-2.0-0`, `libusb-1.0-0`
+  across Debian/MX/Ubuntu without us pinning sonames that drift between
+  releases. Fallback (`adb ffmpeg libsdl2-2.0-0 libusb-1.0-0 libv4l-0`)
+  fires only if `apt install scrcpy` fails (older repo).
+- **Shadow, don't replace.** Same pattern as `install-tmux-dim.sh` —
+  distro `/usr/bin/scrcpy` stays in place as a fallback; `--uninstall`
+  reverts to it cleanly (no apt reinstall needed).
+- **Don't symlink `$BIN`→`$SHARE/scrcpy`.** Upstream's bundled wrapper
+  does `cd "$(dirname ${0})"` then execs `./scrcpy-bin` with
+  `LD_LIBRARY_PATH=$PWD`. A symlink would resolve `dirname` to
+  `/usr/local/bin` and break the lib path. Write a thin shell wrapper
+  that `exec`s the bundled wrapper at its real path under `$SHARE`.
+- **Don't `exit` from the awk that parses the GitHub API.** Same gotcha
+  as `install-anki.sh` — SIGPIPE to curl + `pipefail` would silently
+  wipe the substitution. Use a `seen` flag instead.
+- **Stamp at `/usr/local/share/scrcpy.version`.** Re-run with the same
+  upstream version is a no-op; use `--reinstall` to force.
+
+Anonymous GitHub API rate limit is 60/hr per IP; symptom is an empty
+`url`. Asset regex: `scrcpy-linux-x86_64-v[0-9].*[.]tar[.]gz$` — uses
+`[.]` not `\.` for awk-safety (same reason as `install-anki.sh`).
 
 ### `install-nic-tuning.sh` — permanent NIC tuning (zero power cost)
 
