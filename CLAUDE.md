@@ -385,10 +385,26 @@ the desktop user, NOT under sudo** or configs land in `/root/.config`:
 - `kdeglobals` → `AnimationDurationFactor=0` (instant transitions)
 - `dolphinrc` → `Plugins=imagethumbnail,jpegthumbnail,svgthumbnail,exrthumbnail`
   (keeps image thumbnails, kills the ffmpegthumbs/poppler/taglib
-  spawns on every folder browse)
+  spawns on every folder browse). Only written when the key isn't
+  already set — an earlier draft overwrote unconditionally and wiped
+  per-user plugin choices on every re-run.
 
-Holds `kdeaccessibility` before any removes — otherwise the chained
-`apt autoremove --purge` at the end strips it as a transitive dep.
+Defensive pre-step (load-bearing — added after prior versions bricked
+the desktop on autoremove cascade): before any purge, the script
+`apt-mark manual`s every load-bearing KDE package currently installed
+— `plasma-desktop`, `plasma-workspace`, `plasma-framework`,
+`kwin-x11/wayland/common`, `sddm`, `systemsettings`, `kio`/`kio-extras`,
+`dolphin`, `konsole`, `plasma-nm`, `plasma-pa`, `powerdevil`,
+`kscreen`/`kscreenlocker`, `breeze*`, `qt6-wayland`. Without this, the
+final `apt autoremove --purge -y` walks the dep graph after the
+meta-package removes (`kdegames`, `kde-edu`, kdepim) and can cascade
+into core Plasma packages whose only manual rdep was the meta — the
+desktop is gone on next login. `apt-mark manual` is idempotent and
+reversible (`apt-mark auto <pkg>` to revert).
+
+Holds `kdeaccessibility` before any removes — older Debian releases
+list it as a Recommends on KDE metas, and autoremove drops it.
+
 Adds `plasma-discover-backend-flatpak`, `kde-config-flatpak`, and
 `kde-config-plymouth` (each filtered through `available_only` so MX's
 slimmer repo set doesn't hard-fail when a package isn't carried).
