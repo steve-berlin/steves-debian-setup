@@ -32,7 +32,8 @@ backup.zshrc   reference copy of ~/.zshrc               (do not source)
    `install-steam.sh`, `install-tld.sh`, `install-anki.sh`,
    `install-scrcpy.sh` (Android screen-mirror for rbxvm/Waydroid),
    `debloat-mx.sh`, `debloat-nvidia.sh` (Intel-iGPU-only boxes),
-   `debloat-kde.sh` (only if `plasma-desktop` is installed).
+   `debloat-kde.sh` (only if `plasma-desktop` is installed),
+   `debloat-redmi.sh` (only if a Redmi 4A on LineageOS is connected via ADB).
    Discontinued: `install-roblox.sh`, `check-roblox-prereqs.sh`,
    `install-lineage.sh`, `install-lxqt.sh`, `debloat-xfce.sh` —
    see **installers/discontinued/**.
@@ -419,6 +420,46 @@ for KF5) turns off the Baloo file indexer. Doesn't purge `baloo-kf6` —
 KDE apps link against it — just stops the daemon, recovering CPU +
 ending SSD churn. Idempotent.
 
+### `debloat-redmi.sh` — disable LineageOS preinstalled apps on a Redmi 4A
+
+Host-side script that drives ADB to `pm disable-user --user 0` a curated
+list of LineageOS preinstalled apps on a connected Redmi 4A (`rolex`).
+No root, no bootloader unlock needed; every action reversible with
+`--restore`. Modes: bare (disable SAFE list), `--include-optional` (add
+the OPTIONAL list), `--restore` (re-enable everything this script
+touches), `--list-only` (show pkg + status), `--dry-run`.
+
+Preflight (hard-fails):
+- `adb` on PATH (`apt install adb`).
+- Exactly one authorized device — multi-device case prints serials and
+  tells the user to set `ANDROID_SERIAL`.
+- `getprop ro.product.device` == `rolex` — refuses to run on a
+  different phone (the package list is Redmi-4A LineageOS-specific).
+
+Lists in inline-commented arrays (same pattern as `debloat-kde.sh`):
+- **SAFE** (default): apps with FOSS replacements, disabling does NOT
+  break phone functionality — `jelly` (browser), `email`, `gallery3d`,
+  `eleven` (music), `messaging` (SMS), `audiofx`, `setupwizard`,
+  `fmradio`, legacy `soundrecorder`.
+- **OPTIONAL** (`--include-optional`): `calculator2`, `deskclock`,
+  `org.lineageos.recorder` — useful only if replacements are already
+  installed. `org.lineageos.trebuchet` is in the file but commented
+  out — disabling the default launcher with no replacement set as
+  default locks the user out of the home screen.
+
+Non-obvious gotchas — do not reintroduce:
+- **`adb shell` stdout uses CRLF.** A naive `sed 's/^package://'` leaves
+  a stray `\r` at the end of every package name; `grep -Fxq` then
+  silently misses every match and the script reports every package as
+  "not installed" no matter what's on the device. Pipe through `tr -d
+  '\r'` BEFORE the sed.
+- **Use `pm disable-user --user 0`, not `pm uninstall --user 0`.**
+  disable-user is reversible without sideloading the APK; uninstall is
+  reversible only via factory reset or APK push.
+- **Re-enable via `pm enable --user 0`, not bare `pm enable`.** Older
+  pm versions silently no-op `pm enable <pkg>` for things disabled
+  per-user; `--user 0` matches the disable form.
+
 ### `setup_nordvpn.sh` — replace snap with official deb
 
 Removes snap nordvpn, runs official install.sh, adds user to `nordvpn`
@@ -579,6 +620,43 @@ Three shapes: `nic-boost` (apply, persist until reboot/`--off`);
 INT TERM` covers Ctrl-C/kill); `nic-boost --off` (revert manually). No
 modprobe/dispatcher files written — settings revert on reboot via kernel
 driver defaults. Same on/off pattern as `stm`/`rbx` for TLP/governor.
+
+### `redmi-gaming` — apply/revert gaming profile on a connected Redmi 4A
+
+Host-side ADB-driven toggle for a per-session gaming profile on a
+LineageOS Redmi 4A (`rolex`). Same apply/revert pattern as `nic-boost`
+— two shapes: bare (apply, persist until reverted) and `--off` (revert
+to LineageOS defaults). `--dry-run` prints every `adb shell` command.
+
+Non-root tweaks (always run):
+- Animation scales `0.5x` on window/transition/animator (largest
+  perceived-perf win on a 2 GB / SD425 phone; `0.5` not `0` so
+  touch-target feedback stays legible).
+- `settings put global low_power 0` — explicitly bail out of LineageOS
+  battery saver, which throttles CPU + bg sync.
+- `am force-stop` of `HEAVY` apps (`com.google.android.gms`,
+  `com.android.vending` by default — both no-ops if not installed).
+
+Root-only tweaks (require Magisk `su` OR `adb root` via LOS Developer
+Options → "Rooted debugging"; skipped with a `skip (root needed): …`
+note if neither is available):
+- All CPUs pinned to `performance` governor (SD425's
+  schedutil/interactive ramp is conservative enough to cost frames in
+  touch-heavy games).
+- GPU governor pinned to `performance` (`/sys/class/kgsl/kgsl-3d0`).
+
+Revert restores `1.0` animation scales and the stock rolex governors
+(`schedutil` on CPU, falling back to `interactive` on older LOS;
+`msm-adreno-tz` on GPU).
+
+Non-obvious gotchas — do not reintroduce:
+- **Guard `adb root` with `(( ! dry ))`.** `adb root` restarts adbd as
+  root and bounces the USB connection; running it under `--dry-run`
+  defeats the "no side effects" contract. The Magisk `su` path is
+  side-effect-free and tried first.
+- **`adb shell "su -c '$*'"` works for the no-`'` commands here but
+  is brittle if a future tweak embeds a single quote.** If you add one,
+  switch that call to heredoc-via-stdin.
 
 ### `skl` — Minecraft (zsh alias, not a script)
 
