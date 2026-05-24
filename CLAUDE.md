@@ -264,8 +264,9 @@ Decisions worth knowing:
 ### `debloat-mx.sh` — strip MX Linux bundled apps
 
 Companion script to a fresh MX install (preflights `/etc/mx-version`,
-hard-fails on vanilla Debian). Removes MX-specific bloat in seven
-groups: one-time welcome (`mx-welcome`/`mx-tour`), misc
+hard-fails on vanilla Debian). Removes MX-specific bloat in inline-
+commented groups inside a single `to_remove` array: one-time welcome
+(`mx-welcome`/`mx-tour`), misc
 (`mx-updater`, `mx-packageinstaller*`, `mx-viewer` ["MX browser"],
 `mx-flash`, `mx-codecs`), settings GUIs that duplicate XFCE Settings
 (`mx-keyboard`/`mx-locale`/`mx-date-time`/`mx-user`/`mx-menu-editor`/
@@ -284,9 +285,9 @@ Mx-* packages NOT touched (still useful): `mx-tools`, `mx-snapshot`,
 `mx-cleanup`, `mx-tweak`, `mx-repo-manager`, `mx-iso-dump`,
 `mx-software-defaults`, `mx-default-settings`, `mx-keyring`.
 
-Opt-in (commented-out `optional=()` array in the script): `mx-conky`
-(only if you run Conky), `mxlive-usb-maker` (redundant with
-`mx-iso-dump`), `mx-remastercc`, `mx-installer`.
+Opt-in (commented-out lines at the bottom of `to_remove`; uncomment
+to include): `mx-conky` (only if you run Conky), `mxlive-usb-maker`
+(redundant with `mx-iso-dump`), `mx-remastercc`, `mx-installer`.
 
 Modes: bare, `--dry-run`. For the nvidia/nouveau purge that used to
 live behind `--intel-only`, run the sibling `debloat-nvidia.sh`.
