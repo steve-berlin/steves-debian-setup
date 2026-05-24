@@ -78,11 +78,13 @@ install_scrcpy() {
   sudo rm -rf "$SHARE"
   sudo mkdir -p "$SHARE" "$(dirname "$MAN")"
   sudo cp -a "$dir"/. "$SHARE/"
+  sudo chown -R root:root "$SHARE"  # cp -a preserves tarball uid (typically 1000)
 
-  # Upstream's bundled `scrcpy` does `cd "$(dirname ${0})"` then execs
-  # `./scrcpy-bin` with LD_LIBRARY_PATH=$PWD. Symlinking $BIN→$SHARE/scrcpy
-  # breaks that (dirname resolves to /usr/local/bin). Exec the bundled wrapper
-  # at its real path so the dirname resolution lands inside $SHARE.
+  # v4.0 ships `scrcpy` as a single statically-linked binary; older v3.x ships
+  # it as a shell wrapper that does `cd "$(dirname ${0})"` then execs
+  # `./scrcpy-bin`. A symlink $BIN→$SHARE/scrcpy would break the v3.x layout
+  # (dirname resolves to /usr/local/bin). Exec the bundled entrypoint at its
+  # real path so either layout works.
   sudo install -m 755 /dev/stdin "$BIN" <<EOF
 #!/bin/sh
 exec $SHARE/scrcpy "\$@"

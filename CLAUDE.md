@@ -171,19 +171,32 @@ Debian PATH so the upstream binary wins. Modes: bare, `--reinstall`,
 `--uninstall`, `--dry-run`.
 
 Decisions:
-- **Runtime deps via `apt install scrcpy`.** The distro package's
+- **Runtime deps via `apt install scrcpy`.** Where the distro carries
+  the package (Debian Bookworm and earlier, Ubuntu, older MX), its
   Depends list covers `adb`, `libav*`, `libsdl2-2.0-0`, `libusb-1.0-0`
-  across Debian/MX/Ubuntu without us pinning sonames that drift between
-  releases. Fallback (`adb ffmpeg libsdl2-2.0-0 libusb-1.0-0 libv4l-0`)
-  fires only if `apt install scrcpy` fails (older repo).
+  across releases without us pinning sonames that drift. Trixie
+  **dropped scrcpy** from main repos, so the fallback
+  (`adb ffmpeg libsdl2-2.0-0 libusb-1.0-0 libv4l-0`) fires on every
+  Trixie install. `libv4l-0` resolves to `libv4l-0t64` via apt
+  (t64 time_t-64 transition).
 - **Shadow, don't replace.** Same pattern as `install-tmux-dim.sh` —
-  distro `/usr/bin/scrcpy` stays in place as a fallback; `--uninstall`
-  reverts to it cleanly (no apt reinstall needed).
-- **Don't symlink `$BIN`→`$SHARE/scrcpy`.** Upstream's bundled wrapper
-  does `cd "$(dirname ${0})"` then execs `./scrcpy-bin` with
+  where the distro carries scrcpy, `/usr/bin/scrcpy` stays in place
+  as a fallback and `--uninstall` reverts to it cleanly. On Trixie
+  there is no distro scrcpy, so `--uninstall` leaves the box with no
+  scrcpy at all (re-run the installer or `apt install` upstream-newer
+  from backports if needed).
+- **Don't symlink `$BIN`→`$SHARE/scrcpy`.** v4.0 ships `scrcpy` as a
+  single statically-linked binary that locates `scrcpy-server` via the
+  XDG/`/usr/local/share/scrcpy` search path (works either side of a
+  symlink). v3.x shipped `scrcpy` as a shell wrapper that does
+  `cd "$(dirname ${0})"` then execs `./scrcpy-bin` with
   `LD_LIBRARY_PATH=$PWD`. A symlink would resolve `dirname` to
-  `/usr/local/bin` and break the lib path. Write a thin shell wrapper
-  that `exec`s the bundled wrapper at its real path under `$SHARE`.
+  `/usr/local/bin` and break the v3.x layout. Write a thin shell
+  wrapper that `exec`s the bundled entrypoint at its real path under
+  `$SHARE` so either upstream layout works.
+- **`sudo chown -R root:root $SHARE` after `cp -a`.** `cp -a`
+  preserves the tarball's uid (typically 1000), which would land
+  user-owned files in `/usr/local/share`. Re-chown to root.
 - **Don't `exit` from the awk that parses the GitHub API.** Same gotcha
   as `install-anki.sh` — SIGPIPE to curl + `pipefail` would silently
   wipe the substitution. Use a `seen` flag instead.
