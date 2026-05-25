@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# rbxvm — boot the LineageOS-style (Android-x86) VM for Roblox.
+# rbxvm — boot the Android-x86 VM for Roblox.
 # Mirrors stm/rbx/skl: stop TLP, drop swappiness, pin governor to
 # performance, then exec qemu under KVM.
 #
@@ -8,7 +8,7 @@
 # The host iGPU (T480 UHD 620) is the real ceiling, not these numbers.
 set -euo pipefail
 
-VM_DIR="${LINEAGE_VM_DIR:-$HOME/lineage_vm}"
+VM_DIR="${ANDROID_VM_DIR:-$HOME/android-vm}"
 DISK="$VM_DIR/disk.qcow2"
 ISO="$VM_DIR/android-x86.iso"
 RAM_MB=4096
@@ -20,12 +20,12 @@ ADB_HOST_PORT=5555
 # this script calls directly.
 for cmd in qemu-system-x86_64 qemu-img sudo systemctl stat; do
   command -v "$cmd" >/dev/null \
-    || { echo "error: $cmd not found in PATH — run install-lineage.sh" >&2; exit 1; }
+    || { echo "error: $cmd not found in PATH — run install-android-vm.sh" >&2; exit 1; }
 done
 [[ -e /dev/kvm ]] \
   || { echo "error: /dev/kvm missing (BIOS virtualization disabled?)" >&2; exit 1; }
 [[ -s $DISK ]] \
-  || { echo "error: $DISK missing — run install-lineage.sh first" >&2; exit 1; }
+  || { echo "error: $DISK missing — run install-android-vm.sh first" >&2; exit 1; }
 
 # adb is only needed for the Roblox autostart. Warn but don't fail —
 # autostart is opt-out (RBXVM_NO_AUTOSTART=1), and the user may install
@@ -56,7 +56,7 @@ fi
 cdrom_args=()
 if (( $(stat -c%s "$DISK") < 1048576 )); then
   [[ -s $ISO ]] \
-    || { echo "error: $ISO missing — run install-lineage.sh first" >&2; exit 1; }
+    || { echo "error: $ISO missing — run install-android-vm.sh first" >&2; exit 1; }
   cdrom_args=(-cdrom "$ISO" -boot order=dc,menu=on)
   echo "First boot — booting from ISO. Pick 'Installation' in the GRUB menu."
 fi
@@ -73,7 +73,7 @@ qemu=(
   -audiodev pa,id=snd0 -device intel-hda -device hda-output,audiodev=snd0
   -netdev user,id=net0,hostfwd=tcp:127.0.0.1:$ADB_HOST_PORT-:5555
   -device virtio-net,netdev=net0
-  -name "LineageOS (Roblox VM)"
+  -name "Android-x86 (Roblox VM)"
   "${cdrom_args[@]}"
 )
 

@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# install-lineage.sh — install QEMU/KVM, fetch an Android-x86 ISO, and
-# create an 8 GB qcow2 disk for the Roblox-only "LineageOS" VM that
+# install-android-vm.sh — install QEMU/KVM, fetch an Android-x86 ISO, and
+# create an 8 GB qcow2 disk for the Roblox-only Android-x86 VM that
 # `rbxvm` (~/.local/bin/rbxvm) launches.
 #
-# Why Android-x86, not literal LineageOS: LineageOS ships no official
-# x86_64 image. Android-x86 is the upstream that every desktop fork
-# (Bliss OS, LineageOS-x86) tracks; 9.0-r2 is its newest stable release.
-# Override with LINEAGE_ISO_URL=<https://...iso> to swap in a fork build
-# (Bliss OS images go in this slot when their lockdown lifts).
+# Naming: the VM runs Android-x86 (not LineageOS — LineageOS ships no
+# official x86_64 image). Bliss OS, LineageOS-x86, etc. are all forks
+# of upstream Android-x86; 9.0-r2 is its newest stable release. Override
+# with ANDROID_ISO_URL=<https://...iso> to swap in a fork build (Bliss
+# OS images go in this slot when their lockdown lifts).
 set -euo pipefail
 
-VM_DIR="${LINEAGE_VM_DIR:-$HOME/lineage_vm}"
+VM_DIR="${ANDROID_VM_DIR:-$HOME/android-vm}"
 DISK="$VM_DIR/disk.qcow2"
 DISK_SIZE=8G
 ISO="$VM_DIR/android-x86.iso"
-ISO_URL=${LINEAGE_ISO_URL:-https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download}
+ISO_URL=${ANDROID_ISO_URL:-https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download}
 # qemu-system-gui ships the GTK display, virgl renderer (for virtio-vga-gl),
 # and PulseAudio/PipeWire backends. Without it the launcher's `-display gtk`
 # and `-audiodev pa` fail with "Unknown driver" — silently for audio.
@@ -37,8 +37,8 @@ Usage: $(basename "$0") [--reinstall|--uninstall] [--dry-run]
   --dry-run     Print every action without changing the system. Combinable.
 
 Env overrides:
-  LINEAGE_ISO_URL  Use a different ISO (e.g. a Bliss OS or LineageOS-x86 build).
-  LINEAGE_VM_DIR   Install to a non-default directory (default: \$HOME/lineage_vm).
+  ANDROID_ISO_URL  Use a different ISO (e.g. a Bliss OS or LineageOS-x86 build).
+  ANDROID_VM_DIR   Install to a non-default directory (default: \$HOME/android-vm).
 EOF
 }
 
@@ -117,8 +117,8 @@ Done. Next steps:
   1. Run \`rbxvm\` to boot the VM (ISO + blank disk).
   2. In the VM's GRUB menu pick 'Installation' (not the default 'Live').
   3. Install Android-x86 to the virtio disk (sda) — see
-     ~/steves_debian_setup/lineage_vm/CLAUDE.md for the partition /
-     GRUB / ext4 prompts.
+     ~/steves_debian_setup/CLAUDE.md (install-android-vm.sh section)
+     for the partition / GRUB / ext4 prompts.
   4. After install, power off. \`rbxvm\` boots from disk on subsequent runs.
   5. Sideload the Roblox APK (Play Store is not bundled with Android-x86).
 EOF

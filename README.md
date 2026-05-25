@@ -52,7 +52,7 @@ cp autostarts/*.desktop ~/.config/autostart/
 
 # Discontinued (kept for institutional knowledge — see CLAUDE.md):
 #   installers/discontinued/install-roblox.sh, check-roblox-prereqs.sh,
-#   install-lineage.sh, install-lxqt.sh, debloat-xfce.sh
+#   install-android-vm.sh, install-lxqt.sh, debloat-xfce.sh
 ```
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
@@ -69,7 +69,7 @@ installers/                 utils.sh, check-setup.sh, install-anki.sh, setup_nor
   discontinued/             scripts no longer on the default install path
 debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh / -redmi.sh
 launchers/                  stm, rbx, rbxvm, redmi-gaming, nic-boost
-lineage_vm/                 deployed-state docs for the Roblox-on-Android-x86 VM
+android-vm/                 host-side data files for the Roblox-on-Android-x86 VM (qcow2 + ISO; not committed)
 nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
