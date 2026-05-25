@@ -108,8 +108,8 @@ have brave-browser || shr "curl -fsS https://dl.brave.com/install.sh | sh || tru
 have waydroid || shr "{ curl -s https://repo.waydro.id | $S bash && $S apt-get install -y waydroid; } || true" \
   "add waydroid apt repo + apt install waydroid"
 
-# 8. LazyVim starter + app repos — disabled.
-#[ -d "$HOME/.config/nvim" ] || { git clone --depth=1 https://github.com/LazyVim/starter "$HOME/.config/nvim" && rm -rf "$HOME/.config/nvim/.git"; }
+# 8. LazyVim starter + app repos
+[ -d "$HOME/.config/nvim" ] || { git clone --depth=1 https://github.com/LazyVim/starter "$HOME/.config/nvim" && rm -rf "$HOME/.config/nvim/.git"; }
 
 # 9. pip tools
 run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || true
