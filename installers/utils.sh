@@ -108,8 +108,15 @@ have brave-browser || shr "curl -fsS https://dl.brave.com/install.sh | sh || tru
 have waydroid || shr "{ curl -s https://repo.waydro.id | $S bash && $S apt-get install -y waydroid; } || true" \
   "add waydroid apt repo + apt install waydroid"
 
-# 8. LazyVim starter + app repos
-[ -d "$HOME/.config/nvim" ] || { git clone --depth=1 https://github.com/LazyVim/starter "$HOME/.config/nvim" && rm -rf "$HOME/.config/nvim/.git"; }
+# 8. LazyVim starter — sync from vendored nvim-config/. Fresh-install script, so
+# we overwrite unconditionally (use `git stash` in ~/.config/nvim/ if you've
+# hand-tweaked it and want to keep changes). `cp -a src/.` preserves dotfiles
+# (.gitignore, .neoconf.json); rm-then-cp avoids stale files lingering from an
+# older vendored snapshot.
+nvim_src="$(cd "$(dirname "$0")/.." && pwd)/nvim-config"
+run mkdir -p "$HOME/.config"
+run rm -rf "$HOME/.config/nvim"
+run cp -a "$nvim_src/." "$HOME/.config/nvim/"
 
 # 9. pip tools
 run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || true
