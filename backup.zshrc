@@ -27,7 +27,7 @@ alias poweroff="systemctl poweroff"
 nohup python3 wallchange.py > /dev/null 2>&1 &
 # Disable NVIDIA driver for better iGPU performance
 # rd.driver.blacklist=nouveau nouveau.modeset=0
-. "/home/fred/.deno/env"
+. "$HOME/.deno/env"
 
 # bun completions
-[ -s "/home/fred/.bun/_bun" ] && source "/home/fred/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
