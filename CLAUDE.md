@@ -256,7 +256,7 @@ XFCE `.desktop` autostart files for `~/.config/autostart/` (per user) or `/etc/x
 
 Files: `~/.local/bin/nord-rand` (NordLynx, kill switch, threat protection, autoconnect baked into `setup` mode); `nord-rand.cron`; `~/Desktop/nord-rand.log` (ISO-8601, append-only); SD-card backup at `/media/fred/8B35-3F46/nord-rand{,.cron}` (FAT/exFAT drops +x — `chmod +x` after copy back).
 
-Modes: bare `nord-rand` (random country, **skip if already connected**); `force` (disconnect-and-reconnect — **what cron runs**); `setup` (one-time config: technology + protections, enables autoconnect, tries `post-quantum`); `kill on|off` (kill switch — `off` is the escape hatch). Cron: `0 */6 * * * /home/fred/.local/bin/nord-rand force >/dev/null 2>&1` (output silenced; script logs internally).
+Modes: bare `nord-rand` (random country, **skip if already connected**); `force` (disconnect-and-reconnect — **what cron runs**); `setup` (one-time config: technology + protections, enables autoconnect, tries `post-quantum`); `kill on|off` (kill switch — `off` is the escape hatch). Cron: `0 */6 * * * $HOME/.local/bin/nord-rand force >/dev/null 2>&1` (output silenced; script logs internally).
 
 **Autoconnect ↔ option-B conflict**: user picked "skip if connected" but also enabled NordVPN autoconnect, which keeps VPN up 24/7 so plain `nord-rand` would never rotate. Cron uses `force`; manual invocations default to soft skip. Revert to literal option B by dropping `force` from the cron line.
 
