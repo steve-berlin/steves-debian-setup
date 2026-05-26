@@ -115,9 +115,13 @@ Drops `~/.tmux/plugins/{tpm,tmux-resurrect,tmux-continuum}`; `~/.tmux.conf` (onl
 - **Autostart spawns `tmux new-session -d -s main`, not `start-server`.** A server with zero sessions exits immediately; `main` is a placeholder, continuum adds saved sessions on top at server-start.
 - **Continuum saves every 15 min.** Faster = disk churn for marginal gain (resurrect's pane-content capture isn't free on big scrollback).
 
+Usage: sessions auto-restore at login because `@continuum-restore 'on'` + the autostart `.desktop` together fire continuum's restore hook on server start. Manual save `prefix + Ctrl-s`, manual restore `prefix + Ctrl-r` (resurrect defaults). State at `~/.tmux/resurrect/last` (+ `pane_contents.tar.gz` since `@resurrect-capture-pane-contents 'on'`). Re-attach after login with `tmux a`; `tmux ls` should show `main` (autostart placeholder) plus any restored sessions. First save lands ~15 min after first real use — don't reboot inside that window expecting state.
+
 ### `install-tmux-expose.sh` — Mission Control-style session switcher
 
-Cargo-installs `tmux-expose` (cesarferreira/tmux.expose, Rust TUI with live text thumbnails) + registers the TPM plugin line in `~/.tmux.conf`. Default binding `Alt+e` opens a fullscreen grid; arrows/`hjkl` move, Enter switches, q/Esc quits. `--uninstall` strips the plugin line via `sed`. Preflight: `cargo` on PATH (fails loud if `utils.sh` rustup section hasn't run). Plugin line inserted *before* the `run '…/tpm/tpm'` line because tpm only manages plugins declared above its run-tpm call. Same throwaway-tmux-session dance as immortal for headless TPM install. Idempotent.
+Cargo-installs `tmux-expose` (cesarferreira/tmux.expose, Rust TUI with live text thumbnails) + registers the TPM plugin line in `~/.tmux.conf`. `--uninstall` strips the plugin line via `sed`. Preflight: `cargo` on PATH (fails loud if `utils.sh` rustup section hasn't run). Plugin line inserted *before* the `run '…/tpm/tpm'` line because tpm only manages plugins declared above its run-tpm call. Same throwaway-tmux-session dance as immortal for headless TPM install. Idempotent.
+
+Usage: `Alt+e` (root key table, no prefix) opens a fullscreen popup. Inside: arrow keys move, type any letter to fuzzy-filter session names, Backspace edits the query, Enter switches, Esc/Ctrl-C (or `Alt+e` again) quits without switching. Mouse click also switches. No `hjkl` and no `q` — upstream dropped both. Override the binding with `set -g @tmux-expose-key 's'` + `set -g @tmux-expose-key-table 'prefix'` (or any other key table) *before* the `@plugin` line. Override the grid shape with `set -g @tmux-expose-command 'tmux-expose --columns 2'` (or `--thumbnail-width N`). Anchor + size knobs: `@tmux-expose-anchor` (`center`/`top`/`bottom`/`left`/`right`) + `@tmux-expose-{width,height}` (e.g. `'50%'`). CLI sanity check outside the plugin: `tmux-expose` standalone in any pane gives the same UI without the popup wrapper — use when debugging keybinds.
 
 ### `install-tmux-dim.sh` — build patched tmux with inactive-pane dim
 
@@ -127,6 +131,8 @@ Builds tmux 3.5a from source with `patches/tmux-dim-inactive-panes.patch` (chud-
 - **Stamp at `/usr/local/share/tmux-dim.version`.** Re-run with same `TMUX_VERSION` is a no-op.
 - **Installs to `/usr/local`, not `/usr/bin`.** `/usr/local/bin` precedes `/usr/bin`; apt upgrade of distro `tmux` can't clobber, `--uninstall` cleanly reverts.
 - **Build deps probed individually.** `cc make pkg-config patch curl tar` via `command -v`; `libevent-dev libncurses-dev bison` via `dpkg -s`.
+
+Usage: no opt-in — the patched binary at `/usr/local/bin/tmux` shadows distro tmux and dims every inactive pane automatically. Sanity: `which tmux` → `/usr/local/bin/tmux`; `cat /usr/local/share/tmux-dim.version` → pinned version stamp. Verify behavior by splitting (`prefix + "`) and hopping focus (`prefix + ;`) — the unfocused pane visibly desaturates. No runtime config knobs: dim factors are baked into the patch (30% luma desat + 35% blend toward pane bg). Existing tmux servers continue running the old `/usr/bin/tmux` until restarted — `tmux kill-server` (or log out + back in, which the autostart respawns) to pick up the patched binary.
 
 The Neovim companion (`tint.nvim` Lua transform matching the C algorithm byte-for-byte, FocusLost/FocusGained autocmds to prevent double-dimming) is not yet in `nvim-config/`. Drop under `lua/plugins/` when adding. `theme-palette.patch` (ANSI16-palette awareness) not vendored — requires build-time `theme_palette.h` gen, overkill outside Nix.
 
