@@ -10,17 +10,23 @@ set -euo pipefail
 dry=0
 for a in "$@"; do
   case $a in
-    --dry-run) dry=1 ;;
-    -h|--help) echo "Usage: $(basename "$0") [--dry-run]"; exit 0 ;;
-    *) echo "error: unknown arg: $a" >&2; exit 2 ;;
+  --dry-run) dry=1 ;;
+  -h | --help)
+    echo "Usage: $(basename "$0") [--dry-run]"
+    exit 0
+    ;;
+  *)
+    echo "error: unknown arg: $a" >&2
+    exit 2
+    ;;
   esac
 done
 
 have() { command -v "$1" >/dev/null 2>&1; }
-run()  { (( dry )) && printf 'DRY  %s\n' "$*" || "$@"; }
+run() { ((dry)) && printf 'DRY  %s\n' "$*" || "$@"; }
 # curl|sh installers are opaque in dry-run; print a short summary instead of
 # rendering the whole pipe.
-shr() { (( dry )) && printf 'DRY  %s\n' "$2" || bash -c "$1"; }
+shr() { ((dry)) && printf 'DRY  %s\n' "$2" || bash -c "$1"; }
 S=$(have sudo && echo sudo || echo)
 
 # 1. apt packages
@@ -31,16 +37,16 @@ run $S apt-get install -y --no-install-recommends \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
   tlp linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
-  xsel xfconf wmctrl gh
-run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null \
-  || run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
+  xsel xfconf wmctrl gh exiftool
+run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
+  run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
 
 # 1b. Steam (needs i386 + non-free; best-effort)
 run $S dpkg --add-architecture i386 2>/dev/null || true
 run $S apt-get update -y
-run $S apt-get install -y steam-installer 2>/dev/null \
-  || run $S apt-get install -y steam 2>/dev/null \
-  || echo "[!] steam unavailable — add contrib/non-free to /etc/apt/sources.list" >&2
+run $S apt-get install -y steam-installer 2>/dev/null ||
+  run $S apt-get install -y steam 2>/dev/null ||
+  echo "[!] steam unavailable — add contrib/non-free to /etc/apt/sources.list" >&2
 
 # 2. oh-my-zsh + plugins
 [ -d "$HOME/.oh-my-zsh" ] || shr \
@@ -48,7 +54,7 @@ run $S apt-get install -y steam-installer 2>/dev/null \
   "install oh-my-zsh via curl | sh"
 P="$HOME/.oh-my-zsh/custom/plugins"
 [ -d "$P/zsh-syntax-highlighting" ] || run git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git "$P/zsh-syntax-highlighting"
-[ -d "$P/zsh-autosuggestions" ]     || run git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions.git    "$P/zsh-autosuggestions"
+[ -d "$P/zsh-autosuggestions" ] || run git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions.git "$P/zsh-autosuggestions"
 
 # 3. fzf shell integration
 if [ ! -f "$HOME/.fzf.zsh" ]; then
@@ -74,14 +80,14 @@ have starship || shr "curl -sS https://starship.rs/install.sh | sh -s -- -y" \
   "install nvm v0.39.7 via curl | bash"
 [ -x "$HOME/.deno/bin/deno" ] || shr "curl -fsSL https://deno.land/install.sh | sh -s -- -y || true" \
   "install deno via curl | sh"
-[ -x "$HOME/.bun/bin/bun" ]   || shr "curl -fsSL https://bun.sh/install | bash || true" \
+[ -x "$HOME/.bun/bin/bun" ] || shr "curl -fsSL https://bun.sh/install | bash || true" \
   "install bun via curl | bash"
-[ -d "$HOME/.pyenv" ]         || shr "curl -fsSL https://pyenv.run | bash || true" \
+[ -d "$HOME/.pyenv" ] || shr "curl -fsSL https://pyenv.run | bash || true" \
   "install pyenv via curl | bash"
 
 # 5. go (tarball)
 if [ ! -x "$HOME/.local/go/bin/go" ]; then
-  if (( dry )); then
+  if ((dry)); then
     echo "DRY  download + extract latest go tarball to $HOME/.local/go"
   else
     V=$(curl -fsSL https://go.dev/VERSION?m=text | head -n1)
@@ -93,12 +99,12 @@ fi
 
 # 6. neovim
 if [ ! -x "$HOME/.nvim/bin/nvim" ]; then
-  if (( dry )); then
+  if ((dry)); then
     echo "DRY  download + extract latest nvim tarball to $HOME/.nvim"
   else
     mkdir -p "$HOME/.nvim"
-    curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
-      | tar -C "$HOME/.nvim" --strip-components=1 -xz
+    curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz |
+      tar -C "$HOME/.nvim" --strip-components=1 -xz
   fi
 fi
 
@@ -139,7 +145,7 @@ getent group nordvpn >/dev/null 2>&1 && run $S usermod -aG nordvpn "$USER" || tr
 # 11. tmux: Ctrl+a prefix
 T="$HOME/.tmux.conf"
 if ! grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$T" 2>/dev/null; then
-  if (( dry )); then
+  if ((dry)); then
     echo "DRY  rewrite $T to set tmux prefix = C-a"
   else
     [ -f "$T" ] && sed -i.bak -E '/^\s*(set\s+-g\s+prefix|unbind\s+C-b|bind\s+C-a\s+send-prefix)\b/d' "$T"
@@ -148,7 +154,7 @@ if ! grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$T" 2>/dev/null; then
 fi
 
 # 12. helper scripts: clear-clipboard + focus-nth
-if (( dry )); then
+if ((dry)); then
   echo "DRY  write $HOME/.local/bin/clear-clipboard + focus-nth (chmod +x)"
 else
   mkdir -p "$HOME/.local/bin"
@@ -172,12 +178,12 @@ fi
 # 13. XFCE keybindings (Super = Win)
 if have xfconf-query; then
   X=(xfconf-query -c xfce4-keyboard-shortcuts --create -t string)
-  run "${X[@]}" -p '/xfwm4/custom/<Super>Page_Up'   -s 'maximize_window_key'      || true
-  run "${X[@]}" -p '/xfwm4/custom/<Super>Page_Down' -s 'hide_window_key'          || true
-  run "${X[@]}" -p '/commands/custom/<Super>k'      -s 'systemctl poweroff'       || true
-  run "${X[@]}" -p '/commands/custom/<Super>l'      -s 'xfce4-session-logout --logout' || true
-  run "${X[@]}" -p '/commands/custom/<Super>c'      -s "$HOME/.local/bin/clear-clipboard" || true
-  run "${X[@]}" -p '/commands/custom/Print'         -s 'flameshot gui'            || true
+  run "${X[@]}" -p '/xfwm4/custom/<Super>Page_Up' -s 'maximize_window_key' || true
+  run "${X[@]}" -p '/xfwm4/custom/<Super>Page_Down' -s 'hide_window_key' || true
+  run "${X[@]}" -p '/commands/custom/<Super>k' -s 'systemctl poweroff' || true
+  run "${X[@]}" -p '/commands/custom/<Super>l' -s 'xfce4-session-logout --logout' || true
+  run "${X[@]}" -p '/commands/custom/<Super>c' -s "$HOME/.local/bin/clear-clipboard" || true
+  run "${X[@]}" -p '/commands/custom/Print' -s 'flameshot gui' || true
   run xfconf-query -c xfce4-keyboard-shortcuts -p '/commands/default/Print' -r 2>/dev/null || true
   for i in 1 2 3 4 5 6 7 8 9; do
     run "${X[@]}" -p "/commands/custom/<Super>$i" -s "$HOME/.local/bin/focus-nth $i" || true
@@ -190,10 +196,10 @@ if have kwriteconfig6 || have kwriteconfig5; then
   KGS=kglobalshortcutsrc
   # Value format: "<active>,<default>,<displayname>". Meta+K poweroff, Meta+L logout.
   run "$KW" --file "$KGS" --group ksmserver --key "Halt Without Confirmation" "Meta+K,none,Shut Down"
-  run "$KW" --file "$KGS" --group ksmserver --key "Log Out"                   "Meta+L,Ctrl+Alt+Del,Log Out"
-  run "$KW" --file "$KGS" --group ksmserver --key "Lock Session"              "none,Meta+L,Lock Session"
-  run "$KW" --file kxkbrc --group Layout --key Options          "grp:win_space_toggle"
-  run "$KW" --file kxkbrc --group Layout --key ResetOldOptions  true
+  run "$KW" --file "$KGS" --group ksmserver --key "Log Out" "Meta+L,Ctrl+Alt+Del,Log Out"
+  run "$KW" --file "$KGS" --group ksmserver --key "Lock Session" "none,Meta+L,Lock Session"
+  run "$KW" --file kxkbrc --group Layout --key Options "grp:win_space_toggle"
+  run "$KW" --file kxkbrc --group Layout --key ResetOldOptions true
 fi
 
 # 14. debloat — split out. Run as needed:
