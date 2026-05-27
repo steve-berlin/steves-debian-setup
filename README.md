@@ -74,6 +74,7 @@ nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
+backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm plugins)
 CLAUDE.md                   single consolidated orientation doc for Claude Code
 ```
 
