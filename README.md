@@ -1,10 +1,17 @@
 # steves_debian_setup
 
-Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap, post-install
-verifier, and small installers for Steam, The Long Dark, Anki, scrcpy,
-NIC tuning, plus tmux power-ups and DE debloaters. Launcher wrappers
-apply a gaming perf profile (`stm`, `rbx`, `rbxvm`, `redmi-gaming`) or
-opt-in WiFi/EEE bandwidth boost (`nic-boost`).
+Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap,
+post-install verifier, Anki installer, tmux power-ups, DE debloaters,
+NordVPN setup + 6-hourly country rotation, and an opt-in WiFi/EEE
+bandwidth-boost launcher (`nic-boost`).
+
+Gaming-specific scripts (Steam, The Long Dark, scrcpy, NIC tuning,
+Roblox/Waydroid + Android-x86 VM, `stm`/`rbx`/`rbxvm` launchers, `skl`
+Minecraft alias) moved to
+[steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils);
+Redmi 4A scripts (`debloat-redmi`, `redmi-gaming`) moved to
+[steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup).
+`GAMING.md` keeps the archived notes for both.
 
 Targeted at a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel,
 X11). Most scripts degrade to a warning rather than hard-failing on
@@ -23,18 +30,13 @@ bash installers/utils.sh
 # 2. verify
 bash installers/check-setup.sh
 
-# 3. game/app installers — pick what you want
-bash installers/gaming/install-steam.sh
-bash installers/gaming/install-tld.sh             # The Long Dark (needs stm + Steam)
-bash installers/gaming/install-scrcpy.sh          # upstream scrcpy under /usr/local
+# 3. app installers — pick what you want
 bash installers/install-anki.sh
-bash installers/gaming/install-nic-tuning.sh      # permanent NIC tuning + deploys nic-boost
 
 # 4. debloaters (each opt-in)
 bash debloat_scripts/debloat-mx.sh                # strip MX-bundled apps
 bash debloat_scripts/debloat-nvidia.sh            # purge nvidia/nouveau (Intel-iGPU boxes only)
 bash debloat_scripts/debloat-kde.sh               # post-install KDE Plasma debloat
-bash debloat_scripts/debloat-redmi.sh             # disable LineageOS bloat on a Redmi 4A (ADB)
 
 # 5. tmux stack (each independent)
 bash installers/tmux_setup/install-tmux-immortal.sh   # tpm + resurrect + continuum
@@ -46,13 +48,12 @@ bash installers/setup_nordvpn.sh                  # replace snap with official d
 install -m 755 nord-job/nord-rand ~/.local/bin/
 crontab nord-job/nord-rand.cron                   # see CLAUDE.md "nord-job/" section
 
-# 7. drop launchers and autostarts in place
-install -m 755 launchers/stm launchers/rbx launchers/rbxvm launchers/redmi-gaming launchers/nic-boost ~/.local/bin/
+# 7. drop launcher and autostarts in place
+install -m 755 launchers/nic-boost ~/.local/bin/
 cp autostarts/*.desktop ~/.config/autostart/
 
 # Discontinued (kept for institutional knowledge — see CLAUDE.md):
-#   installers/discontinued/install-roblox.sh, check-roblox-prereqs.sh,
-#   install-android-vm.sh, install-lxqt.sh, debloat-xfce.sh
+#   installers/discontinued/install-lxqt.sh, debloat-xfce.sh
 ```
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
@@ -63,19 +64,18 @@ per-script details.
 
 ```
 installers/                 utils.sh, check-setup.sh, install-anki.sh, setup_nordvpn.sh
-  gaming/                   install-steam.sh, install-tld.sh, install-scrcpy.sh, install-nic-tuning.sh
   tmux_setup/               install-tmux-immortal.sh / -expose.sh / -dim.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             scripts no longer on the default install path
-debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh / -redmi.sh
-launchers/                  stm, rbx, rbxvm, redmi-gaming, nic-boost
-android-vm/                 host-side data files for the Roblox-on-Android-x86 VM (qcow2 + ISO; not committed)
+debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh
+launchers/                  nic-boost
 nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm plugins)
 CLAUDE.md                   single consolidated orientation doc for Claude Code
+GAMING.md                   archived notes for the gaming/redmi scripts moved to sister repos
 ```
 
 ## Conventions
