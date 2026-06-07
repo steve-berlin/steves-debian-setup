@@ -11,7 +11,6 @@ Minecraft alias) moved to
 [steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils);
 Redmi 4A scripts (`debloat-redmi`, `redmi-gaming`) moved to
 [steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup).
-`GAMING.md` keeps the archived notes for both.
 
 Targeted at a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel,
 X11). Most scripts degrade to a warning rather than hard-failing on
@@ -75,7 +74,6 @@ nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/n
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm plugins)
 CLAUDE.md                   single consolidated orientation doc for Claude Code
-GAMING.md                   archived notes for the gaming/redmi scripts moved to sister repos
 ```
 
 ## Conventions

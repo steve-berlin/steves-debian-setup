@@ -1,6 +1,6 @@
 # steves_debian_setup
 
-Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel, X11). Turns a clean MX install into the working environment, plus a few apps without first-class Linux delivery. Gaming-specific scripts moved to [steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils); Redmi-specific scripts moved to [steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup). See `GAMING.md` for archived notes.
+Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel, X11). Turns a clean MX install into the working environment, plus a few apps without first-class Linux delivery. Gaming-specific scripts moved to [steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils); Redmi-specific scripts moved to [steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup).
 
 ## Layout
 
@@ -16,7 +16,6 @@ nord-job/                   nord-rand + nord-rand.cron (6-hourly NordVPN rotatio
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
 backup.zshrc                reference copy of ~/.zshrc (don't source — tokens stripped)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/resurrect/continuum/expose)
-GAMING.md                   archived notes for the gaming/redmi scripts moved to sister repos
 ```
 
 ## Install order on a fresh box
@@ -41,7 +40,7 @@ GAMING.md                   archived notes for the gaming/redmi scripts moved to
 
 ## Not in this repo
 
-Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partitions (`/games/{steam,minecraft}`), Roblox/Steam/Minecraft runtime data, and Waydroid/Android-x86 VM state are documented in `GAMING.md` and the sister gaming/redmi repos.
+Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partitions (`/games/{steam,minecraft}`), Roblox/Steam/Minecraft runtime data, and Waydroid/Android-x86 VM state are documented in the sister gaming/redmi repos.
 
 ---
 
