@@ -32,35 +32,28 @@ for i in /sys/class/net/*; do
   elif [[ -e $i/device/driver ]]; then eth+=("$n"); fi
 done
 
-apply() {
+# Both knobs flip together — `off` boosts (kills idle napping), `on` = default.
+set_nic() {
+  local st=$1 n
   for n in "${wifi[@]}"; do
-    command -v iw >/dev/null && sudo iw dev "$n" set power_save off 2>/dev/null || true
+    command -v iw >/dev/null && sudo iw dev "$n" set power_save "$st" 2>/dev/null || true
   done
   for n in "${eth[@]}"; do
-    sudo ethtool --set-eee "$n" eee off 2>/dev/null || true
-  done
-}
-
-revert() {
-  for n in "${wifi[@]}"; do
-    command -v iw >/dev/null && sudo iw dev "$n" set power_save on 2>/dev/null || true
-  done
-  for n in "${eth[@]}"; do
-    sudo ethtool --set-eee "$n" eee on 2>/dev/null || true
+    sudo ethtool --set-eee "$n" eee "$st" 2>/dev/null || true
   done
 }
 
 if [[ $mode == off ]]; then
-  revert
+  set_nic on
   echo "nic-boost off (wifi power_save=on, eee=on)"
   exit 0
 fi
 
-apply
+set_nic off
 echo "nic-boost on  (wifi power_save=off, eee=off — eth: ${eth[*]:-none}  wifi: ${wifi[*]:-none})"
 
 if (( $# > 0 )); then
-  trap revert EXIT INT TERM
+  trap 'set_nic on' EXIT INT TERM
   "$@"
 else
   echo "(reverts on reboot; or run 'nic-boost --off' to revert manually)"

@@ -78,9 +78,8 @@ run curl -fsSL -o "tmux-${TMUX_VERSION}.tar.gz" "$SRC_URL"
 run tar xf "tmux-${TMUX_VERSION}.tar.gz"
 run cd "tmux-${TMUX_VERSION}"
 
-# --dry-run sanity-checks the patch against the source tree without applying.
-# Critical: a future tmux release that drifts past the hunks would otherwise
-# silently produce a tmux with no dimming and no error.
+# Sanity-check the patch first (no apply): a future tmux that drifts past the
+# hunks would otherwise silently build a tmux with no dimming and no error.
 if (( dry )); then
   echo "DRY  patch --dry-run -p1 -i $PATCH"
 else

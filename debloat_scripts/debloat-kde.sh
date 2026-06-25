@@ -44,18 +44,18 @@ available_only() {
   local p; for p in "$@"; do apt-cache show "$p" >/dev/null 2>&1 && printf '%s\n' "$p"; done
   return 0
 }
+# Echo the first of its args that's on PATH (empty if none). KF6/KF5 tools
+# coexist; this picks whichever generation is installed.
+firstof() {
+  local c; for c in "$@"; do command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }; done
+  return 0
+}
 
 # --- defensive pre-step: protect the desktop from `autoremove --purge` -------
-#
-# After we purge metapackages (kdegames, kde-edu, kde-standard's transitive
-# deps), the final `apt autoremove --purge -y` walks the dep graph and
-# anything that's currently "automatic" without a manual rdep gets purged.
-# In practice that has cascaded plasma-desktop, kwin, sddm, dolphin, etc. —
-# the desktop is gone on next login.
-#
-# Fix: mark every load-bearing piece "manual" before any removes. apt-mark
-# manual is idempotent and reversible. We mark only the packages currently
-# installed (auto OR manual — manual stays manual, auto becomes manual).
+# Purging metas (kdegames/kde-edu/…) leaves their old deps "automatic"; the
+# final `apt autoremove --purge` then cascades into plasma-desktop/kwin/sddm/
+# dolphin and the desktop is gone next login. Fix: mark every load-bearing
+# piece "manual" first (idempotent + reversible). Mark only installed ones.
 echo "── protecting core KDE from autoremove cascade ──"
 core=(
   plasma-desktop plasma-workspace plasma-framework
@@ -190,26 +190,19 @@ fi
 # --- service tweaks ---------------------------------------------------------
 # Disable Baloo file indexer — keeps the libs (KDE apps link them) but stops
 # the background daemon + SSD churn. Idempotent.
-if command -v balooctl6 >/dev/null 2>&1; then
-  run balooctl6 disable || true
-elif command -v balooctl >/dev/null 2>&1; then
-  run balooctl disable || true
-fi
+baloo=$(firstof balooctl6 balooctl)
+if [[ -n $baloo ]]; then run "$baloo" disable || true; fi
 
 # --- Plasma config tweaks (per-user) ----------------------------------------
 # MUST NOT run under sudo or configs land in /root/.config.
-KW=""
-command -v kwriteconfig6 >/dev/null 2>&1 && KW=kwriteconfig6
-[[ -z $KW ]] && command -v kwriteconfig5 >/dev/null 2>&1 && KW=kwriteconfig5
+KW=$(firstof kwriteconfig6 kwriteconfig5)
 if [[ -n $KW ]]; then
   echo "── Plasma config tweaks ──"
   run "$KW" --file ksmserverrc --group General --key loginMode emptySession
   run "$KW" --file kdeglobals  --group KDE     --key AnimationDurationFactor 0
-  # Dolphin Plugins: only set if the user hasn't already configured it.
-  # Overwriting unconditionally was wiping per-user plugin choices on re-run.
-  KREAD=""
-  command -v kreadconfig6 >/dev/null 2>&1 && KREAD=kreadconfig6
-  [[ -z $KREAD ]] && command -v kreadconfig5 >/dev/null 2>&1 && KREAD=kreadconfig5
+  # Dolphin Plugins: only set if the user hasn't already configured it —
+  # overwriting unconditionally was wiping per-user plugin choices on re-run.
+  KREAD=$(firstof kreadconfig6 kreadconfig5)
   if [[ -n $KREAD ]] \
      && [[ -z $("$KREAD" --file dolphinrc --group PreviewSettings --key Plugins 2>/dev/null) ]]; then
     run "$KW" --file dolphinrc --group PreviewSettings --key Plugins \

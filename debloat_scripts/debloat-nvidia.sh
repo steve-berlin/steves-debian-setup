@@ -43,8 +43,7 @@ if lspci -nn -d ::0300 -d ::0302 -d ::0380 | grep -qi nvidia; then
   exit 1
 fi
 
-# Same expand_installed pattern as debloat-mx.sh / debloat-kde.sh:
-# accepts globs + literals, filters down to currently-installed only,
+# Same expand_installed as debloat-mx/kde: globs + literals → installed-only,
 # so re-runs are no-ops.
 expand_installed() {
   local pat

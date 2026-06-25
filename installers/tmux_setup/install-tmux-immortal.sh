@@ -33,8 +33,7 @@ if [[ $mode == uninstall ]]; then
   exit 0
 fi
 
-command -v tmux >/dev/null || run sudo apt install -y tmux
-command -v git  >/dev/null || run sudo apt install -y git
+for c in tmux git; do command -v "$c" >/dev/null || run sudo apt install -y "$c"; done
 [[ -d $TPM_DIR ]] || run git clone --depth=1 https://github.com/tmux-plugins/tpm "$TPM_DIR"
 
 # Only write ~/.tmux.conf if absent — never clobber a hand-rolled config.

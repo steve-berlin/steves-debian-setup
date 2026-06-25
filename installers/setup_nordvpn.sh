@@ -42,14 +42,12 @@ else
   sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
 fi
 
-if getent group nordvpn >/dev/null 2>&1; then
-  if id -nG "$USER" | tr ' ' '\n' | grep -qx nordvpn; then
-    echo "$USER already in nordvpn group."
-  else
-    run sudo usermod -aG nordvpn "$USER"
-  fi
-else
+if ! getent group nordvpn >/dev/null 2>&1; then
   echo "warn: nordvpn group missing — installer may have failed."
+elif id -nG "$USER" | tr ' ' '\n' | grep -qx nordvpn; then
+  echo "$USER already in nordvpn group."
+else
+  run sudo usermod -aG nordvpn "$USER"
 fi
 
 echo "Log out/in (for group change), then: nordvpn login && nordvpn connect"

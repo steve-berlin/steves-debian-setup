@@ -41,11 +41,7 @@ if [[ $mode == uninstall ]]; then
   run cargo uninstall "$CRATE" 2>/dev/null || true
   # Strip the plugin line if we added it. Leave the rest of ~/.tmux.conf alone.
   if [[ -f $CONF ]] && grep -Fqx "$PLUGIN_LINE" "$CONF"; then
-    if (( dry )); then
-      echo "DRY  sed -i '/^set -g @plugin .cesarferreira\/tmux.expose.$/d' $CONF"
-    else
-      sed -i "\|$PLUGIN_LINE|d" "$CONF"
-    fi
+    run sed -i "\|$PLUGIN_LINE|d" "$CONF"
   fi
   echo "uninstalled $CRATE; plugin dir under ~/.tmux/plugins/tmux.expose left for TPM to clean"
   exit 0

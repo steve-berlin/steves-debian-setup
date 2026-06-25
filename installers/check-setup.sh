@@ -95,16 +95,12 @@ if [[ ${sess,,} == *kde* ]] && { have kreadconfig6 || have kreadconfig5; }; then
   KR=$(command -v kreadconfig6 || command -v kreadconfig5)
   KGS=kglobalshortcutsrc
   kk() {
-    # kk <file> <group> <key> <want-prefix>
-    # match by prefix because Plasma rewrites the value as
-    # "<active>\t<default>\t<displayname>" — only the active binding is
-    # what utils.sh asserts.
-    local got want_pre
-    got=$("$KR" --file "$1" --group "$2" --key "$3" 2>/dev/null || true)
-    want_pre="$4"
+    # kk <file> <group> <key> <want-prefix> — match by prefix: Plasma rewrites
+    # the value as "<active>\t<default>\t<displayname>"; we assert <active>.
+    local got; got=$("$KR" --file "$1" --group "$2" --key "$3" 2>/dev/null || true)
     case "$got" in
-      "$want_pre"*) ok "kde $1[$2][$3] starts with '$want_pre'" ;;
-      *)            bad "kde $1[$2][$3] = '$got' (want prefix '$want_pre')" ;;
+      "$4"*) ok "kde $1[$2][$3] starts with '$4'" ;;
+      *)     bad "kde $1[$2][$3] = '$got' (want prefix '$4')" ;;
     esac
   }
   kk "$KGS"  ksmserver "Halt Without Confirmation" "Meta+K"
