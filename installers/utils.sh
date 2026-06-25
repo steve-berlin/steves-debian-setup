@@ -29,6 +29,19 @@ run() { ((dry)) && printf 'DRY  %s\n' "$*" || "$@"; }
 shr() { ((dry)) && printf 'DRY  %s\n' "$2" || bash -c "$1"; }
 S=$(have sudo && echo sudo || echo)
 
+# 0. First things first: offer to delete the discontinued installers (kept only
+#    for reference, never on the install path). Prompt only on an interactive
+#    tty; --dry-run and piped/non-interactive runs keep them.
+disc="$(cd "$(dirname "$0")" && pwd)/discontinued"
+if [[ -d $disc ]]; then
+  if (( dry )); then echo "DRY  prompt: delete discontinued installers ($disc)"
+  elif [[ -t 0 ]]; then
+    read -r -p "Delete discontinued installers in $disc? [y/N] " ans
+    if [[ $ans == [yY]* ]]; then rm -rf "$disc"; echo "deleted $disc"
+    else echo "kept $disc"; fi
+  fi
+fi
+
 # 1. apt packages
 run $S apt-get update -y
 run $S apt-get install -y --no-install-recommends \
