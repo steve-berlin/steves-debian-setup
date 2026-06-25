@@ -1,16 +1,13 @@
 # steves_debian_setup
 
 Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap,
-post-install verifier, Anki installer, tmux power-ups, DE debloaters,
-NordVPN setup + 6-hourly country rotation, and an opt-in WiFi/EEE
-bandwidth-boost launcher (`nic-boost`).
+post-install verifier, Anki + Ly display-manager installers, tmux
+power-ups, DE debloaters, NordVPN setup + 6-hourly country rotation,
+and an opt-in WiFi/EEE bandwidth-boost launcher (`nic-boost`).
 
-Gaming-specific scripts (Steam, The Long Dark, scrcpy, NIC tuning,
-Roblox/Waydroid + Android-x86 VM, `stm`/`rbx`/`rbxvm` launchers, `skl`
-Minecraft alias) moved to
-[steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils);
-Redmi 4A scripts (`debloat-redmi`, `redmi-gaming`) moved to
-[steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup).
+Gaming and Redmi-specific scripts have moved to their own repos:
+[steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils)
+and [steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup).
 
 Targeted at a ThinkPad T480 (Intel UHD 620, x86_64, Liquorix kernel,
 X11). Most scripts degrade to a warning rather than hard-failing on
@@ -24,6 +21,7 @@ git clone https://github.com/steve-berlin/steves-debian-setup ~/steves_debian_se
 cd ~/steves_debian_setup
 
 # 1. bulk bootstrap (apt + toolchains + oh-my-zsh + nvim-config seed)
+#    step 0 offers (y/N) to delete installers/discontinued/ — kept on a piped run
 bash installers/utils.sh
 
 # 2. verify
@@ -31,6 +29,7 @@ bash installers/check-setup.sh
 
 # 3. app installers — pick what you want
 bash installers/install-anki.sh
+bash installers/install-ly.sh                     # Ly TUI display manager (prompts before swapping default DM)
 
 # 4. debloaters (each opt-in)
 bash debloat_scripts/debloat-mx.sh                # strip MX-bundled apps
@@ -62,7 +61,7 @@ per-script details.
 ## Repo layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-immortal.sh / -expose.sh / -dim.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             scripts no longer on the default install path
