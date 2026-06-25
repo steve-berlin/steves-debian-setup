@@ -5,7 +5,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 ## Layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-{immortal,expose,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
@@ -23,7 +23,7 @@ backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/res
 1. `installers/utils.sh` — bulk apt + toolchains + oh-my-zsh + seeds nvim. Everything else assumes this ran.
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
-4. App installers (each independent): `install-anki.sh`, `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
+4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
 5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
@@ -63,6 +63,15 @@ Gotchas — do not reintroduce:
 2. **Don't `local tmp` for the scratch dir referenced by the EXIT trap.** Trap fires after the function returns, local is gone, `set -u` blows up with `tmp: unbound variable`. Keep `tmp` at script scope, reference as `${tmp:-}` in the trap.
 
 Layout: `/usr/local/bin/anki`, `/usr/local/share/anki/`, `~/.local/share/Anki2/` (decks/media), `~/.cache/Anki2/` (downloaded real app, regeneratable).
+
+### `install-ly.sh` — build & install the Ly TUI display manager
+
+Ly isn't packaged for MX/Debian here and needs a matching Zig toolchain to build, so the script fetches a pinned Zig tarball (`ziglang.org`) + a pinned Ly git tag (`fairyglade/ly`, submodules zigini+clap), builds with `zig build`, then `sudo zig build installexe -Dinit_system=systemd` (writes `/usr/bin/ly`, `/etc/ly/`, `ly.service`). Pins overridable: `LY_VERSION=1.0.3 ZIG_VERSION=0.13.0` (Ly 1.0.x needs Zig 0.13; v1.0.3 is the last GitHub release — newer Ly moved hosts and wants Zig 0.16). Stamp at `/usr/local/share/ly.version` → re-run with same `LY_VERSION` is a no-op (avoids clobbering `/etc/ly/config.ini`). Modes: bare / `--reinstall` / `--uninstall` / `--dry-run`, plus `--default` / `--no-default`.
+
+- **Default-DM switch is opt-in via a y/N prompt** (the requirement). Only on "yes" does `make_default` disable the live `display-manager.service` (SDDM on this box) + `getty@tty2.service` (Ly owns tty2) and `systemctl enable ly.service`. `--default`/`--no-default` skip the prompt; non-interactive stdin defaults to *no* with a warning so a piped run can't silently swap the DM out from under you.
+- **`installexe` runs under sudo, the user-mode `zig build` first.** Compile errors surface as the user before root touches the system; installexe writes absolute system paths (not a `DESTDIR` prefix), so it needs root.
+- **Preflight checks build headers via `dpkg -s libpam0g-dev libxcb-xkb-dev`** (Zig links Ly against system PAM+XCB) and hard-fails on missing `git/curl/tar/sudo/systemctl`; arch guard maps only `x86_64`/`aarch64` to a Zig tarball name.
+- **`--uninstall` re-enables `getty@tty2` and removes Ly's files but does NOT re-enable a DM** — it prints the `systemctl enable sddm` reminder instead, because guessing the prior DM and silently re-wiring `display-manager.service` is the kind of surprise that bricks a login.
 
 ### `setup_nordvpn.sh` — replace snap with official deb
 
