@@ -91,14 +91,19 @@ build_install() {
   run git clone --depth 1 --branch "v${LY_VERSION}" --recurse-submodules --shallow-submodules \
       "$LY_REPO" "$tmp/ly"
 
-  # 3. Build as the user (surfaces compile errors loudly), then installexe as
-  #    root — installexe writes /usr/bin/ly, /etc/ly/, and ly.service directly.
+  # 3. Build as the user (surfaces compile errors loudly), then install as root.
+  #    v1.0.3 has no -Dinit_system flag: `installexe` writes /usr/bin/ly +
+  #    /etc/ly, and the `installsystemd` step (which dependOn's installexe)
+  #    adds /usr/lib/systemd/system/ly.service. So `installsystemd` does both.
+  #    The root build writes root-owned files into $tmp/.zig-cache; chown the
+  #    tree back afterward so the user-mode EXIT trap can remove it.
   if (( dry )); then
     echo "DRY  ( cd $tmp/ly && $zig build )"
-    echo "DRY  ( cd $tmp/ly && sudo $zig build installexe -Dinit_system=systemd )"
+    echo "DRY  ( cd $tmp/ly && sudo $zig build installsystemd )"
   else
     ( cd "$tmp/ly" && "$zig" build )
-    ( cd "$tmp/ly" && sudo "$zig" build installexe -Dinit_system=systemd )
+    ( cd "$tmp/ly" && sudo "$zig" build installsystemd )
+    sudo chown -R "$(id -u):$(id -g)" "$tmp"
   fi
   write_stamp
   echo "Ly v${LY_VERSION} installed. Config: /etc/ly/config.ini"
