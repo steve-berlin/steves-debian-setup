@@ -17,7 +17,7 @@ np()  { pkg "$1"    && bad "pkg  $1 still installed" || ok "pkg  $1 removed"; }
 cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 
 # 1. apt packages
-for p in zsh git curl fzf tmux tlp gamemode copyq flameshot mpv playerctl \
+for p in zsh git curl fzf tmux power-profiles-daemon gamemode copyq flameshot mpv playerctl \
          easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop; do cp_ "$p"; done
 
 # 2. oh-my-zsh + plugins

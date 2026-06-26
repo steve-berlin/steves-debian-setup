@@ -18,7 +18,7 @@ eval "$(starship init zsh)" # STARSHIP
 # ======================= ALIASES =======================
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-alias skl='sudo systemctl stop tlp;sudo sysctl vm.swappiness=10;sudo cpupower frequency-set -g performance;gamemoderun java -jar ~/Desktop/SKlauncher-3.2.18.jar --workDir /games/minecraft'
+alias skl='powerprofilesctl set performance;sudo sysctl vm.swappiness=10;gamemoderun java -jar ~/Desktop/SKlauncher-3.2.18.jar --workDir /games/minecraft'
 alias reboot="systemctl reboot"
 alias media="/usr/bin/media.sh"
 alias logoff='dbus-send --session --type=method_call --print-reply --dest=org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager.Logout uint32:1'

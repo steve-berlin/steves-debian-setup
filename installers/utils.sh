@@ -34,10 +34,13 @@ S=$(have sudo && echo sudo || echo)
 #    tty; --dry-run and piped/non-interactive runs keep them.
 disc="$(cd "$(dirname "$0")" && pwd)/discontinued"
 if [[ -d $disc ]]; then
-  if (( dry )); then echo "DRY  prompt: delete discontinued installers ($disc)"
+  if ((dry)); then
+    echo "DRY  prompt: delete discontinued installers ($disc)"
   elif [[ -t 0 ]]; then
     read -r -p "Delete discontinued installers in $disc? [y/N] " ans
-    if [[ $ans == [yY]* ]]; then rm -rf "$disc"; echo "deleted $disc"
+    if [[ $ans == [yY]* ]]; then
+      rm -rf "$disc"
+      echo "deleted $disc"
     else echo "kept $disc"; fi
   fi
 fi
@@ -48,7 +51,7 @@ run $S apt-get install -y --no-install-recommends \
   zsh git curl wget unzip ca-certificates build-essential python3 python3-pip fzf tmux \
   autoconf bison libssl-dev libreadline-dev zlib1g-dev libyaml-dev libncurses-dev \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
-  tlp linux-cpupower default-jre gamemode \
+  power-profiles-daemon linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
   xsel xfconf wmctrl gh exiftool btop
 run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
