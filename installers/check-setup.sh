@@ -18,7 +18,7 @@ cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 
 # 1. apt packages
 for p in zsh git curl fzf tmux tlp gamemode copyq flameshot mpv playerctl \
-         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl; do cp_ "$p"; done
+         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop; do cp_ "$p"; done
 
 # 2. oh-my-zsh + plugins
 cd_ "$HOME/.oh-my-zsh"
@@ -54,6 +54,8 @@ for p in yt-dlp tldr platformio; do cbin "$p"; done
 # 9. flatpak + Organic Maps
 have flatpak && flatpak info --user app.organicmaps.desktop >/dev/null 2>&1 \
   && ok "flatpak Organic Maps" || bad "flatpak Organic Maps missing"
+have flatpak && flatpak info --user network.loki.Session >/dev/null 2>&1 \
+  && ok "flatpak Session" || bad "flatpak Session missing"
 
 # 10. Claude Code + NordVPN
 { have claude || [ -x "$HOME/.local/bin/claude" ]; } && ok "claude" || bad "claude missing"

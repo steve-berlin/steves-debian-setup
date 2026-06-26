@@ -50,7 +50,7 @@ run $S apt-get install -y --no-install-recommends \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
   tlp linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
-  xsel xfconf wmctrl gh exiftool
+  xsel xfconf wmctrl gh exiftool btop
 run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
   run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
 
@@ -142,6 +142,7 @@ run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || tru
 if have flatpak; then
   run flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
   run flatpak install --user -y flathub app.organicmaps.desktop || true
+  run flatpak install --user -y flathub network.loki.Session || true
 fi
 
 # 10b. Claude Code
