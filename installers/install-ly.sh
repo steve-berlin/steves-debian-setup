@@ -12,15 +12,6 @@ fi
 # "yes" does it disable the current display-manager + getty@tty2 and enable
 # ly.service. --default / --no-default skip the prompt for non-interactive use.
 #
-# It also overwrites Ly's upstream /etc/pam.d/ly (four `include login` lines)
-# with a Debian/MX-appropriate PAM stack modeled on Debian's own sddm file.
-# Upstream's `include login` pulls getty-oriented modules and, critically, does
-# not reliably run pam_systemd in Ly's session — so logind never creates
-# /run/user/<uid>, XDG_RUNTIME_DIR stays root's /run/user/0, and Wayland
-# sessions die with "Can't open Wayland socket" / "Unable to open lockfile"
-# while auth quirks surface as "Can't authenticate user". The replacement
-# stack always reaches common-session (→ pam_systemd → XDG_RUNTIME_DIR).
-#
 # Override pins: LY_VERSION=1.0.3 ZIG_VERSION=0.13.0 (Ly 1.0.x needs Zig 0.13;
 # v1.0.3 is the last GitHub release, newer Ly moved hosts + wants Zig 0.16).
 set -euo pipefail
@@ -29,7 +20,6 @@ LY_VERSION=${LY_VERSION:-1.0.3}
 ZIG_VERSION=${ZIG_VERSION:-0.13.0}
 LY_REPO=https://github.com/fairyglade/ly
 STAMP=/usr/local/share/ly.version   # idempotency marker; re-run = no-op
-PAM_FILE=/etc/pam.d/ly              # rewritten with a Debian-appropriate stack
 
 dry=0; mode=install; set_default=-1   # -1 prompt, 1 yes, 0 no
 tmp=""  # script-scoped so EXIT trap can rm it
@@ -71,12 +61,6 @@ preflight() {
   for p in libpam0g-dev libxcb-xkb-dev; do
     dpkg -s "$p" >/dev/null 2>&1 || miss "missing: $p — sudo apt install $p"
   done
-  # pam_systemd (from libpam-systemd) is what creates /run/user/<uid> and sets
-  # XDG_RUNTIME_DIR at login. Ly's whole Wayland-socket/lockfile failure mode
-  # hinges on it running in the session; normally the desktop pulls it, but
-  # check explicitly since the corrected PAM stack is useless without it.
-  dpkg -s libpam-systemd >/dev/null 2>&1 || \
-    miss "missing: libpam-systemd — sudo apt install libpam-systemd (XDG_RUNTIME_DIR / Wayland)"
   case "$(uname -m)" in
     x86_64|aarch64) ;;
     *) miss "unsupported arch $(uname -m) — Zig tarball name only mapped for x86_64/aarch64" ;;
@@ -125,52 +109,6 @@ build_install() {
   echo "Ly v${LY_VERSION} installed. Config: /etc/ly/config.ini"
 }
 
-# Overwrite Ly's upstream /etc/pam.d/ly with a Debian/MX-appropriate stack.
-# Runs on every install/reinstall (idempotent — same bytes each time), so it
-# also repairs boxes where an older run left the upstream `include login` file
-# in place even when the build step is skipped by the version stamp.
-install_pam() {
-  echo "Writing Debian-appropriate PAM stack: $PAM_FILE"
-  if (( dry )); then
-    printf 'DRY  write %s (clean auth via common-auth + pam_systemd session)\n' "$PAM_FILE"
-    return
-  fi
-  # Mirrors Debian's own display-manager PAM (sddm): clean auth through
-  # common-auth, and a session that always reaches common-session so
-  # pam_systemd runs and XDG_RUNTIME_DIR (/run/user/<uid>) is set up. The
-  # keyring/kwallet lines are '-'-prefixed: skipped silently if the module
-  # isn't installed. pam_succeed_if blocks root GUI login, per DM convention.
-  sudo tee "$PAM_FILE" >/dev/null <<'EOF'
-#%PAM-1.0
-# Ly display manager — Debian/MX PAM stack (installed by install-ly.sh).
-#
-# Replaces Ly upstream's default (four `include login` lines). On Debian,
-# /etc/pam.d/login is getty-oriented and does not reliably run pam_systemd in
-# Ly's session; without it logind never creates /run/user/<uid> and
-# XDG_RUNTIME_DIR stays root's /run/user/0, so Wayland sessions fail with
-# "Can't open Wayland socket" / "Unable to open lockfile" and auth quirks show
-# up as "Can't authenticate user". Modeled on Debian's vetted sddm PAM.
-auth       requisite    pam_nologin.so
-auth       required     pam_succeed_if.so user != root quiet_success
-@include common-auth
--auth      optional     pam_gnome_keyring.so
--auth      optional     pam_kwallet5.so
-
-@include common-account
-
-session    required     pam_limits.so
-session    required     pam_loginuid.so
-@include common-session
--session   optional     pam_gnome_keyring.so auto_start
--session   optional     pam_kwallet5.so auto_start
-session    required     pam_env.so readenv=1
-session    required     pam_env.so readenv=1 envfile=/etc/default/locale
-
-@include common-password
-EOF
-  sudo chmod 0644 "$PAM_FILE"
-}
-
 # Disable whatever DM is wired now + the tty2 getty Ly uses, then enable ly.
 make_default() {
   local cur; cur=$(current_dm)
@@ -205,7 +143,7 @@ uninstall_ly() {
   run sudo systemctl disable ly.service 2>/dev/null || true
   run sudo systemctl enable getty@tty2.service 2>/dev/null || true
   run sudo rm -f /usr/bin/ly /usr/lib/systemd/system/ly.service \
-                 /etc/systemd/system/ly.service "$PAM_FILE" "$STAMP"
+                 /etc/systemd/system/ly.service "$STAMP"
   run sudo rm -rf /etc/ly
   echo "Ly removed. Enable a DM (e.g. 'sudo systemctl enable sddm') before reboot."
 }
@@ -220,9 +158,5 @@ case $mode in
       build_install
     fi ;;
 esac
-
-# Always (re)assert the corrected PAM stack — cheap, idempotent, and repairs an
-# already-installed box whose build step was skipped by the version stamp.
-install_pam
 
 maybe_make_default
