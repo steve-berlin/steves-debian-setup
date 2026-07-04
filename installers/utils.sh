@@ -8,11 +8,14 @@ fi
 set -euo pipefail
 
 dry=0
+uninstall_caveman=0
 for a in "$@"; do
   case $a in
   --dry-run) dry=1 ;;
+  --uninstall-caveman) uninstall_caveman=1 ;;
   -h | --help)
-    echo "Usage: $(basename "$0") [--dry-run]"
+    echo "Usage: $(basename "$0") [--dry-run] [--uninstall-caveman]"
+    echo "  --uninstall-caveman  remove the caveman Claude Code plugin, then exit"
     exit 0
     ;;
   *)
@@ -28,6 +31,23 @@ run() { ((dry)) && printf 'DRY  %s\n' "$*" || "$@"; }
 # rendering the whole pipe.
 shr() { ((dry)) && printf 'DRY  %s\n' "$2" || bash -c "$1"; }
 S=$(have sudo && echo sudo || echo)
+
+# caveman needs node >= 18 for its install/uninstall (npx / bin/install.js).
+# utils.sh installs nvm (step 4) but no default node version, so source nvm to
+# put a user-installed node on PATH. Guarded against set -u fallout in nvm.sh.
+source_nvm() {
+  local nvm_sh="${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+  if [ -s "$nvm_sh" ]; then set +u; . "$nvm_sh" >/dev/null 2>&1 || true; set -u; fi
+}
+
+# --uninstall-caveman: strip the plugin + hooks and bail before the install flow.
+if ((uninstall_caveman)); then
+  source_nvm
+  shr "npx -y github:JuliusBrussee/caveman -- --uninstall" \
+    "uninstall caveman (npx github:JuliusBrussee/caveman -- --uninstall)"
+  echo "[✓] caveman uninstalled"
+  exit 0
+fi
 
 # 0. First things first: offer to delete the discontinued installers (kept only
 #    for reference, never on the install path). Prompt only on an interactive
@@ -151,6 +171,24 @@ fi
 # 10b. Claude Code
 have claude || shr "curl -fsSL https://claude.ai/install.sh | bash || true" \
   "install claude via curl | bash"
+
+# 10b'. caveman — Claude Code token-compression plugin (JuliusBrussee/caveman).
+#       Universal installer wires the plugin + hooks + statusline into ~/.claude
+#       and drops a ~/.claude/.caveman-active flag file we use as the idempotency
+#       guard. Needs node >= 18 (source_nvm puts nvm's node on PATH; nvm install
+#       --lts provides one since utils.sh installs no default node). Remove with
+#       `utils.sh --uninstall-caveman`.
+source_nvm
+if ! have node && have nvm; then
+  if ((dry)); then
+    echo "DRY  nvm install --lts (no node on PATH for caveman)"
+  else
+    nvm install --lts >/dev/null 2>&1 || true
+  fi
+fi
+[ -e "$HOME/.claude/.caveman-active" ] || shr \
+  "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash -s -- --non-interactive || true" \
+  "install caveman (Claude Code plugin) via curl | bash"
 
 # 10c. NordVPN
 have nordvpn || shr "curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh | sh || true" \
