@@ -5,7 +5,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 ## Layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, fix-suspend-freeze.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-{immortal,expose,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
@@ -23,7 +23,7 @@ backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/res
 1. `installers/utils.sh` — bulk apt + toolchains + oh-my-zsh + seeds nvim. Everything else assumes this ran.
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
-4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
+4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
 5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
@@ -72,6 +72,16 @@ Ly isn't packaged for MX/Debian here and needs a matching Zig toolchain to build
 - **`installsystemd` runs under sudo, the user-mode `zig build` first.** Compile errors surface as the user before root touches the system; the install step writes absolute system paths (not a `DESTDIR` prefix), so it needs root. The root build drops root-owned files into `$tmp/.zig-cache`, so the script `sudo chown -R`s `$tmp` back to the user afterward — otherwise the user-mode EXIT-trap `rm -rf` can't clean it.
 - **Preflight checks build headers via `dpkg -s libpam0g-dev libxcb-xkb-dev`** (Zig links Ly against system PAM+XCB) and hard-fails on missing `git/curl/tar/sudo/systemctl`; arch guard maps only `x86_64`/`aarch64` to a Zig tarball name. **Under `--dry-run` every preflight miss downgrades to a `warning:` instead of an `exit 1`** (via a local `miss` helper) — a dry-run must still print the build/install plan it would run, and you'd typically dry-run on a box that hasn't installed the build toolchain yet.
 - **`--uninstall` re-enables `getty@tty2` and removes Ly's files but does NOT re-enable a DM** — it prints the `systemctl enable sddm` reminder instead, because guessing the prior DM and silently re-wiring `display-manager.service` is the kind of surprise that bricks a login.
+- **Login crashes right after resume are NOT a Ly bug** — see `fix-suspend-freeze.sh`. The symptoms (`Can't open Wayland socket` / `Unable to open lockfile` / `Can't authenticate user`, intermittent, "after a few logins") come from systemd freezing `user.slice` on sleep; a login racing the thaw fails to create its session scope. Plain getty `login` hits it too. An earlier attempt to fix this by rewriting `/etc/pam.d/ly` was a misdiagnosis (reverted) — `pam_systemd` was working fine; the scope creation was losing a race against the freeze.
+
+### `fix-suspend-freeze.sh` — stop logins crashing after suspend/resume
+
+systemd 256+ freezes `user.slice` (via `systemd-sleep`) on entering sleep and thaws it on resume. When a login lands in the un-thawed window, `pam_systemd` can't create the session scope and the journal shows `Cannot start frozen unit session-N.scope` → `Failed to create session: Job … failed with 'frozen'`. No session scope → no `/run/user/<uid>` → the Wayland session dies with **"Can't open Wayland socket"** / **"Unable to open lockfile"**, surfacing as **"Can't authenticate user"**. Intermittent ("crashes after a few logins") because it only bites inside a suspend/resume window. **Not Ly-specific** — a getty `login` hits the same race.
+
+Fix: drop-in `no-freeze-user-sessions.conf` on all four sleep services (`systemd-{suspend,hibernate,hybrid-sleep,suspend-then-hibernate}.service`) setting `Environment="SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=false"` — the documented systemd knob (honored by `systemd-sleep` since v256) that skips the user-session freeze, so there's no thaw to race. `systemctl daemon-reload` after; takes effect next sleep, no reboot. Modes: bare / `--reinstall` (== install, idempotent) / `--uninstall` (removes drop-ins + empty dirs) / `--dry-run`.
+
+- **Preflight greps the actual `systemd-sleep` binary for the var name** (added in systemd 256) so an older systemd fails loud instead of writing a silent no-op drop-in. The check captures `strings` output into a var rather than `strings | grep -q` — under `pipefail`, `grep -q` closes the pipe early, SIGPIPEs `strings`, and the pipeline falsely reports failure (the same trap `install-anki.sh` documents).
+- **Verify it took**: `systemctl show systemd-suspend.service -p Environment` shows the var; after the next resume the journal logs `User sessions remain unfrozen on explicit request` and no new `'frozen'` session-scope errors.
 
 ### `setup_nordvpn.sh` — replace snap with official deb
 
