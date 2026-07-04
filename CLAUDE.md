@@ -5,7 +5,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 ## Layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, fix-suspend-freeze.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh, fix-suspend-freeze.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-{immortal,expose,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
@@ -23,7 +23,7 @@ backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/res
 1. `installers/utils.sh` — bulk apt + toolchains + oh-my-zsh + seeds nvim. Everything else assumes this ran.
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
-4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
+4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM; verify with `check-ly.sh`), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
 5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
@@ -75,6 +75,15 @@ Ly isn't packaged for MX/Debian here and needs a matching Zig toolchain to build
 - **Preflight checks build headers via `dpkg -s libpam0g-dev libxcb-xkb-dev`** (Zig links Ly against system PAM+XCB) and hard-fails on missing `git/curl/tar/sudo/systemctl`; arch guard maps only `x86_64`/`aarch64` to a Zig tarball name. **Under `--dry-run` every preflight miss downgrades to a `warning:` instead of an `exit 1`** (via a local `miss` helper) — a dry-run must still print the build/install plan it would run, and you'd typically dry-run on a box that hasn't installed the build toolchain yet.
 - **`--uninstall` re-enables `getty@tty2` and removes Ly's files but does NOT re-enable a DM** — it prints the `systemctl enable sddm` reminder instead, because guessing the prior DM and silently re-wiring `display-manager.service` is the kind of surprise that bricks a login.
 - **Login crashes right after resume are NOT a Ly bug** — see `fix-suspend-freeze.sh`. The symptoms (`Can't open Wayland socket` / `Unable to open lockfile` / `Can't authenticate user`, intermittent, "after a few logins") come from systemd freezing `user.slice` on sleep; a login racing the thaw fails to create its session scope. Plain getty `login` hits it too. An earlier attempt to fix this by rewriting `/etc/pam.d/ly` was a misdiagnosis (reverted) — `pam_systemd` was working fine; the scope creation was losing a race against the freeze.
+
+### `check-ly.sh` — read-only health check for the whole Ly stack
+
+Diagnoses every known Ly failure mode up front so a broken login is caught here, not at a black screen. Mutates nothing; mirrors `check-setup.sh`'s `[OK]`/`[FAIL]` style plus `[WARN]` (advisory/historical, never fails the run) and `[--]` (info). Exit 0 iff no FAILs. Run it after `install-ly.sh`, after any suspend/login weirdness, or before trusting a fresh box.
+
+Sections: **binary & version** (`/usr/bin/ly` exec, `ly --version` — note it prints to **stderr** — vs the `/usr/local/share/ly.version` stamp); **config & setup scripts** (`config.ini`, `xsetup.sh`/`wsetup.sh` executable, save dir — Ly writes `save_file` as root so only its existence matters); **config-referenced commands** (every binary named in `config.ini` — `x_cmd`/`xauth_cmd`/`mcookie_cmd`/`term_*`/`shutdown_cmd`… — a missing one is a silent login failure); **login sessions available** (≥1 `.desktop` in xsessions/wayland-sessions); **service wiring** (`ly.service` is `display-manager.service`, enabled, no getty racing its tty); **PAM stack** (recurses `/etc/pam.d/ly` includes one level, verifies every referenced `pam_*.so` exists — `-`-prefixed optional lines don't fail); **logind/XDG_RUNTIME_DIR** (systemd PID 1, logind active, `libpam-systemd`, `pam_systemd.so`, `/run/user/<uid>` owned by the user); **suspend-freeze fix** (var honored + drop-in on all four sleep services — see below); **journal scan** (counts + newest timestamp for `frozen` session-scope failures, pam_systemd create-session failures, Wayland socket/lockfile errors, PAM auth failures, real ly.service crashes).
+
+- **Journal scan needs system-journal read.** It picks a reader in order: passwordless `sudo -n`, membership in `adm`/`systemd-journal`, then an interactive `sudo -v` prompt; if none work it degrades to a single WARN (not a FAIL) telling you to re-run with sudo. Historical hits (e.g. the pre-fix `frozen` errors) surface as WARN by design — they're how you confirm the fix landed and nothing new is recurring.
+- **`ly --version` and the freeze-var probe both write to stderr / need care under `pipefail`.** Version parse uses `2>&1`; the `strings`-of-`systemd-sleep` probe captures into a var rather than `strings | grep -q` (which would SIGPIPE `strings` — the same trap `install-anki.sh`/`fix-suspend-freeze.sh` document).
 
 ### `fix-suspend-freeze.sh` — stop logins crashing after suspend/resume
 
