@@ -1,0 +1,20 @@
+{
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "theme": "dark",
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"/home/steve/.claude/plugins/marketplaces/caveman/src/hooks/caveman-statusline.sh\""
+  },
+  "skipAutoPermissionPrompt": true,
+  "enabledPlugins": {
+    "caveman@caveman": true
+  }
+}

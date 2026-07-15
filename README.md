@@ -72,6 +72,7 @@ autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm plugins)
+claude-config/settings.json reference copy of ~/.claude/settings.json (statusline, caveman plugin, effort)
 CLAUDE.md                   single consolidated orientation doc for Claude Code
 ```
 

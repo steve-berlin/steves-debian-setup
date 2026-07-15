@@ -16,6 +16,7 @@ nord-job/                   nord-rand + nord-rand.cron (6-hourly NordVPN rotatio
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
 backup.zshrc                reference copy of ~/.zshrc (don't source — tokens stripped)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/resurrect/continuum/expose)
+claude-config/settings.json reference copy of ~/.claude/settings.json (statusline uses stable marketplaces path, not versioned cache hash)
 ```
 
 ## Install order on a fresh box
