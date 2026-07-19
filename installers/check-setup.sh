@@ -18,7 +18,8 @@ cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 
 # 1. apt packages
 for p in zsh git curl fzf tmux power-profiles-daemon gamemode copyq flameshot mpv playerctl \
-         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop; do cp_ "$p"; done
+         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop ncdu \
+         zathura zathura-pdf-mupdf zathura-djvu; do cp_ "$p"; done
 
 # 1c. atmel-firmware — purged unless an at76c50x device is present (utils.sh 1c).
 if [ -d /sys/bus/usb/drivers/at76c50x_usb ] && ls /sys/bus/usb/drivers/at76c50x_usb 2>/dev/null | grep -qE '^[0-9]'; then

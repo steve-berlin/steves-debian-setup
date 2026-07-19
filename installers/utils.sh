@@ -73,7 +73,8 @@ run $S apt-get install -y --no-install-recommends \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
   power-profiles-daemon linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
-  xsel xfconf wmctrl gh exiftool btop
+  xsel xfconf wmctrl gh exiftool btop ncdu \
+  zathura zathura-pdf-mupdf zathura-djvu
 run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
   run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
 
