@@ -20,6 +20,22 @@ cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 for p in zsh git curl fzf tmux power-profiles-daemon gamemode copyq flameshot mpv playerctl \
          easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop; do cp_ "$p"; done
 
+# 1c. atmel-firmware — purged unless an at76c50x device is present (utils.sh 1c).
+if [ -d /sys/bus/usb/drivers/at76c50x_usb ] && ls /sys/bus/usb/drivers/at76c50x_usb 2>/dev/null | grep -qE '^[0-9]'; then
+  pkg atmel-firmware && ok "atmel-firmware kept (at76 device present)" \
+    || bad "atmel-firmware missing but an at76 device is present"
+else
+  np atmel-firmware
+fi
+
+# 1d. dash purged + /bin/sh repointed to zsh (utils.sh 1d).
+np dash
+sh_tgt=$(readlink -f /bin/sh 2>/dev/null || true)
+case "$sh_tgt" in
+  */zsh) ok "/bin/sh -> $sh_tgt" ;;
+  *)     bad "/bin/sh -> '$sh_tgt' (want zsh)" ;;
+esac
+
 # 2. oh-my-zsh + plugins
 cd_ "$HOME/.oh-my-zsh"
 cd_ "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"

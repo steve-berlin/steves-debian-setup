@@ -84,6 +84,49 @@ run $S apt-get install -y steam-installer 2>/dev/null ||
   run $S apt-get install -y steam 2>/dev/null ||
   echo "[!] steam unavailable — add contrib/non-free to /etc/apt/sources.list" >&2
 
+# 1c. atmel-firmware: firmware for Atmel at76c50x USB 802.11b dongles (~2004),
+#     pulled in on some installs but dead weight on Intel-wifi boxes. Guard
+#     against yanking firmware a real device needs — only purge when no at76
+#     device is bound to the driver, the module isn't loaded, and lsusb sees
+#     nothing matching. Any hit keeps the package with a warning.
+atmel_present() {
+  local d=/sys/bus/usb/drivers/at76c50x_usb
+  [ -d "$d" ] && ls "$d" 2>/dev/null | grep -qE '^[0-9]' && return 0
+  lsmod 2>/dev/null | grep -qi at76c50x_usb && return 0
+  have lsusb && lsusb 2>/dev/null | grep -qiE 'at76|atmel.*(wireless|802\.11)' && return 0
+  return 1
+}
+if dpkg -l atmel-firmware 2>/dev/null | grep -q '^ii'; then
+  if atmel_present; then
+    echo "[!] atmel-firmware kept — an at76c50x device appears present" >&2
+  else
+    run $S apt-get purge -y atmel-firmware
+  fi
+fi
+
+# 1d. dash: repoint /bin/sh to zsh, then purge dash. dash is Essential and owns
+#     the /bin/sh symlink via debconf (dpkg -S /bin/sh finds no package), so the
+#     order is load-bearing: flip the symlink to zsh FIRST — otherwise purge
+#     strands /bin/sh — and pass --allow-remove-essential so apt doesn't stop at
+#     the interactive "Yes, do as I say!" guard. dash's postrm may drop the
+#     symlink, so reassert it afterward. Needs zsh (installed in step 1). Once
+#     /bin/sh is zsh and dash is gone, every step below is a no-op (idempotent).
+#     NOTE: zsh runs /bin/sh in POSIX emulation — fine for system scripts, but a
+#     deliberate, non-default choice; revert with `apt-get install dash` +
+#     `dpkg-reconfigure dash`.
+if dpkg -l dash 2>/dev/null | grep -q '^ii'; then
+  zsh_bin=$(command -v zsh || true)
+  if [ -z "$zsh_bin" ]; then
+    echo "[!] dash kept — zsh not on PATH for /bin/sh" >&2
+  else
+    # Silence dash's debconf so a later reconfigure can't re-grab /bin/sh.
+    run $S sh -c 'echo "dash dash/sh boolean false" | debconf-set-selections'
+    run $S ln -sf "$zsh_bin" /bin/sh
+    run $S apt-get purge -y --allow-remove-essential dash
+    run $S ln -sf "$zsh_bin" /bin/sh
+  fi
+fi
+
 # 2. oh-my-zsh + plugins
 [ -d "$HOME/.oh-my-zsh" ] || shr \
   'RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' \
