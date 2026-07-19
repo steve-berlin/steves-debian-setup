@@ -79,8 +79,10 @@ have nordvpn && ok "nordvpn" || bad "nordvpn missing"
 getent group nordvpn 2>/dev/null | grep -q "\b$USER\b" \
   && ok "user in nordvpn group" || bad "user NOT in nordvpn group"
 
-# 11. tmux prefix
-grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$HOME/.tmux.conf" 2>/dev/null \
+# 11. tmux prefix = C-a. utils.sh writes `prefix C-a`; if install-tmux-omt.sh
+#     ran, ~/.tmux.conf is the gpakosz symlink which binds C-a as `prefix2`.
+#     Accept either (follows the symlink).
+grep -qE '^\s*set\s+-g\s+prefix2?\s+C-a' "$HOME/.tmux.conf" 2>/dev/null \
   && ok "tmux prefix = C-a" || bad "tmux prefix not set to C-a"
 
 # 12. helper scripts
