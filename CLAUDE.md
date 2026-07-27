@@ -6,7 +6,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 
 ```
 installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh, fix-suspend-freeze.sh, setup_nordvpn.sh
-  tmux_setup/               install-tmux-{omt,immortal,expose,dim}.sh
+  tmux_setup/               install-tmux-{immortal,expose,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
 debloat_scripts/            debloat-{mx,kde,nvidia}.sh
@@ -14,7 +14,6 @@ launchers/                  nic-boost
 autostarts/                 *.desktop for ~/.config/autostart
 nord-job/                   nord-rand + nord-rand.cron (6-hourly NordVPN rotation)
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
-tmux-config/                vendored gpakosz oh-my-tmux (install-tmux-omt.sh deploys it)
 backup.zshrc                reference copy of ~/.zshrc (don't source — tokens stripped)
 backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/resurrect/continuum/expose)
 claude-config/settings.json reference copy of ~/.claude/settings.json (statusline uses stable marketplaces path, not versioned cache hash)
@@ -26,7 +25,7 @@ claude-config/settings.json reference copy of ~/.claude/settings.json (statuslin
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
 4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM; verify with `check-ly.sh`), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
-5. Tmux: `tmux_setup/install-tmux-omt.sh` (gpakosz base config — run first if you want it), then `install-tmux-{immortal,expose,dim}.sh`.
+5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
 8. `autostarts/*.desktop` → `~/.config/autostart/`.
@@ -106,13 +105,11 @@ Removes snap nordvpn, runs official install.sh, adds user to `nordvpn` group. Lo
 
 ## installers/tmux_setup/
 
-### `install-tmux-omt.sh` — deploy gpakosz "oh my tmux!" from the vendored copy
-
-Deploys the vendored gpakosz config in `tmux-config/` (see that section). No network: `cp`s `tmux-config/.tmux.conf` → `~/.tmux/.tmux.conf`, symlinks `~/.tmux.conf` at it, and seeds `~/.tmux.conf.local` from the vendored template **only when absent** (never clobbers your edits). Then TPM + plugins install headless via the throwaway-`_tpm_omt`-session trick (same reason as immortal — tpm reads `TMUX_PLUGIN_MANAGER_PATH` from tmux's global env, so it needs a live server; a serverless `setenv -g` spawns a server that exits immediately with zero sessions). Modes: bare / `--reinstall` (refreshes the engine copy + repoints symlink; leaves `.local`) / `--uninstall` / `--dry-run`.
-
-- **gpakosz's model, kept intact.** `~/.tmux.conf` is a *managed symlink* to the engine — never hand-edit it; all tweaks go in `~/.tmux.conf.local`. C-a is gpakosz's built-in **secondary** prefix (`set -g prefix2 C-a` at the top of the engine; C-b stays primary), so the utils.sh step-11 "prefix C-a" invariant holds. `check-setup.sh` step 11 was widened to match `prefix2? C-a` so it passes on both a utils-only box and an omt box (it follows the symlink).
-- **Interacts with the other tmux installers.** `install-tmux-immortal.sh` writes a *real* `~/.tmux.conf`; omt backs that aside to `~/.tmux.conf.bak.<stamp>` and replaces it with the symlink. To keep session persistence, the vendored `.tmux.conf.local` already declares `tmux-resurrect` + `tmux-continuum` (the gpakosz way — no `run tpm` line, gpakosz auto-runs TPM). `install-tmux-dim.sh` is orthogonal (it patches the tmux *binary*, not the config) and composes fine. `install-tmux-expose.sh` appends its `@plugin` line to `~/.tmux.conf` — after omt, add that line to `~/.tmux.conf.local` instead (the engine is a managed symlink).
-- **`--uninstall`** removes the symlink, restores the newest `~/.tmux.conf.bak.*` if one exists, and drops the engine copy; it keeps `~/.tmux.conf.local` + `~/.tmux/plugins` (delete by hand for a clean slate).
+> **Removed: gpakosz "oh my tmux!" (`install-tmux-omt.sh` + vendored
+> `tmux-config/`).** Cut out entirely — the tmux setup is the plain
+> `~/.tmux.conf` written by `utils.sh` / `install-tmux-immortal.sh`
+> (`prefix C-a`, real file, no managed symlink), mirrored by
+> `backup.tmux.conf`. Recover from git history if ever wanted back.
 
 ### `install-tmux-immortal.sh` — persist tmux sessions across reboots
 
@@ -213,16 +210,6 @@ Country list pulled live every invocation. `list_countries()` strips ANSI, norma
 Failure modes: kill switch ON + daemon dead → no internet (recover with `nord-rand kill off` or `sudo systemctl restart nordvpnd`); 5 attempts all unavailable → exit 1; cron silently drops mail (no MTA) — visibility in `~/Desktop/nord-rand.log`.
 
 ---
-
-## tmux-config/ — vendored gpakosz oh-my-tmux
-
-Snapshot of gpakosz [.tmux](https://github.com/gpakosz/.tmux) (master @ `af33f07`). Same role as `nvim-config/`: the in-repo copy is canonical; `install-tmux-omt.sh` deploys it with `cp` (no clone, no network, no upstream drift on install). Files:
-
-- `.tmux.conf` — the gpakosz engine, deployed verbatim as `~/.tmux/.tmux.conf`. **Never edit** — it's the tracked-upstream half.
-- `.tmux.conf.local` — the user-settings template, seeded to `~/.tmux.conf.local`. Pre-edited: a marked block enables `tmux-resurrect` + `tmux-continuum` (`@continuum-restore on`, 15-min save, capture-pane-contents) the gpakosz way. gpakosz auto-runs TPM, so there is **no** `set -g @plugin 'tmux-plugins/tpm'` and **no** `run tpm` line — adding either breaks gpakosz's tpm integration.
-- `LICENSE.MIT` + `LICENSE.WTFPLv2` — gpakosz is dual MIT/WTFPL; both kept for attribution (MIT requires retaining the notice).
-
-Refresh upstream deliberately: re-fetch the two config files + re-apply the marked plugin block, bump the pinned commit here, commit. gpakosz is master-only (no tags), so pin by commit SHA.
 
 ## nvim-config/ — vendored LazyVim starter
 
