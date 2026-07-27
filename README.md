@@ -38,7 +38,6 @@ bash debloat_scripts/debloat-kde.sh               # post-install KDE Plasma debl
 
 # 5. tmux stack (each independent)
 bash installers/tmux_setup/install-tmux-immortal.sh   # tpm + resurrect + continuum
-bash installers/tmux_setup/install-tmux-expose.sh     # Mission-Control-style session switcher
 bash installers/tmux_setup/install-tmux-dim.sh        # patched tmux 3.5a w/ inactive-pane dim
 
 # 6. optional: random NordVPN country rotation every 6h
@@ -61,8 +60,8 @@ per-script details.
 ## Repo layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, setup_nordvpn.sh
-  tmux_setup/               install-tmux-immortal.sh / -expose.sh / -dim.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, install-mx-frugal.sh, setup_nordvpn.sh
+  tmux_setup/               install-tmux-immortal.sh / -dim.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             scripts no longer on the default install path
 debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh

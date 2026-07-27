@@ -6,7 +6,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 
 ```
 installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh, fix-suspend-freeze.sh, install-mx-frugal.sh, setup_nordvpn.sh
-  tmux_setup/               install-tmux-{immortal,expose,dim}.sh
+  tmux_setup/               install-tmux-{immortal,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
 debloat_scripts/            debloat-{mx,kde,nvidia}.sh
@@ -15,7 +15,7 @@ autostarts/                 *.desktop for ~/.config/autostart
 nord-job/                   nord-rand + nord-rand.cron (6-hourly NordVPN rotation)
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
 backup.zshrc                reference copy of ~/.zshrc (don't source — tokens stripped)
-backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/resurrect/continuum/expose)
+backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm/resurrect/continuum)
 claude-config/settings.json reference copy of ~/.claude/settings.json (statusline uses stable marketplaces path, not versioned cache hash)
 ```
 
@@ -25,7 +25,7 @@ claude-config/settings.json reference copy of ~/.claude/settings.json (statuslin
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
 4. App installers (each independent): `install-anki.sh`, `install-mx-frugal.sh` (only when *reinstalling the OS itself* with no USB stick — see its section), `install-ly.sh` (Ly DM — prompts before swapping the default DM; verify with `check-ly.sh`), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
-5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
+5. Tmux: `tmux_setup/install-tmux-{immortal,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
 8. `autostarts/*.desktop` → `~/.config/autostart/`.
@@ -134,11 +134,10 @@ Drops `~/.tmux/plugins/{tpm,tmux-resurrect,tmux-continuum}`; `~/.tmux.conf` (onl
 
 Usage: sessions auto-restore at login because `@continuum-restore 'on'` + the autostart `.desktop` together fire continuum's restore hook on server start. Manual save `prefix + Ctrl-s`, manual restore `prefix + Ctrl-r` (resurrect defaults). State at `~/.tmux/resurrect/last` (+ `pane_contents.tar.gz` since `@resurrect-capture-pane-contents 'on'`). Re-attach after login with `tmux a`; `tmux ls` should show `main` (autostart placeholder) plus any restored sessions. First save lands ~15 min after first real use — don't reboot inside that window expecting state.
 
-### `install-tmux-expose.sh` — Mission Control-style session switcher
-
-Cargo-installs `tmux-expose` (cesarferreira/tmux.expose, Rust TUI with live text thumbnails) + registers the TPM plugin line in `~/.tmux.conf`. `--uninstall` strips the plugin line via `sed`. Preflight: `cargo` on PATH (fails loud if `utils.sh` rustup section hasn't run). Plugin line inserted *before* the `run '…/tpm/tpm'` line because tpm only manages plugins declared above its run-tpm call. Same throwaway-tmux-session dance as immortal for headless TPM install. Idempotent.
-
-Usage: `Alt+e` (root key table, no prefix) opens a fullscreen popup. Inside: arrow keys move, type any letter to fuzzy-filter session names, Backspace edits the query, Enter switches, Esc/Ctrl-C (or `Alt+e` again) quits without switching. Mouse click also switches. No `hjkl` and no `q` — upstream dropped both. Override the binding with `set -g @tmux-expose-key 's'` + `set -g @tmux-expose-key-table 'prefix'` (or any other key table) *before* the `@plugin` line. Override the grid shape with `set -g @tmux-expose-command 'tmux-expose --columns 2'` (or `--thumbnail-width N`). Anchor + size knobs: `@tmux-expose-anchor` (`center`/`top`/`bottom`/`left`/`right`) + `@tmux-expose-{width,height}` (e.g. `'50%'`). CLI sanity check outside the plugin: `tmux-expose` standalone in any pane gives the same UI without the popup wrapper — use when debugging keybinds.
+> **Removed: `install-tmux-expose.sh`** (cesarferreira/tmux.expose, Alt+e
+> session switcher). Cut along with the `@plugin` line + `@tmux-expose-*`
+> settings in `backup.tmux.conf`. Recover from git history if wanted back;
+> nothing else depended on it (it only appended a TPM plugin line).
 
 ### `install-tmux-dim.sh` — build patched tmux with inactive-pane dim
 
