@@ -31,6 +31,9 @@ fi
 
 # 1d. dash purged + /bin/sh repointed to zsh (utils.sh 1d).
 np dash
+
+# 1e. foliate purged — zathura + mupdf backend covers EPUB (utils.sh 1e).
+np foliate
 sh_tgt=$(readlink -f /bin/sh 2>/dev/null || true)
 case "$sh_tgt" in
   */zsh) ok "/bin/sh -> $sh_tgt" ;;
@@ -68,13 +71,15 @@ have waydroid      && ok "waydroid" || bad "waydroid missing"
 # 8. pip tools. yewtube's entry point is `yt` (utils.sh step 9b).
 for p in yt-dlp tldr platformio yt; do cbin "$p"; done
 
-# 9. flatpak + Organic Maps, Session, SimpleX Chat
+# 9. flatpak + Organic Maps, Session, SimpleX Chat, EarTag
 have flatpak && flatpak info --user app.organicmaps.desktop >/dev/null 2>&1 \
   && ok "flatpak Organic Maps" || bad "flatpak Organic Maps missing"
 have flatpak && flatpak info --user network.loki.Session >/dev/null 2>&1 \
   && ok "flatpak Session" || bad "flatpak Session missing"
 have flatpak && flatpak info --user chat.simplex.simplex >/dev/null 2>&1 \
   && ok "flatpak SimpleX Chat" || bad "flatpak SimpleX Chat missing"
+have flatpak && flatpak info --user app.drey.EarTag >/dev/null 2>&1 \
+  && ok "flatpak EarTag" || bad "flatpak EarTag missing"
 
 # 10. Claude Code + NordVPN
 { have claude || [ -x "$HOME/.local/bin/claude" ]; } && ok "claude" || bad "claude missing"

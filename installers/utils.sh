@@ -128,6 +128,16 @@ if dpkg -l dash 2>/dev/null | grep -q '^ii'; then
   fi
 fi
 
+# 1e. foliate: GTK ebook reader, superseded by zathura + the mupdf backend from
+#     step 1 (one keyboard-driven viewer covering EPUB alongside PDF/XPS/CBZ).
+#     Purge + autoremove --purge to also drop the gjs/webkit stack it pulled in;
+#     nothing else here depends on those, and the autoremove is scoped by apt to
+#     packages left orphaned. Skipped when foliate isn't installed (idempotent).
+if dpkg -l foliate 2>/dev/null | grep -q '^ii'; then
+  run $S apt-get purge -y foliate
+  run $S apt-get autoremove -y --purge
+fi
+
 # 2. oh-my-zsh + plugins
 [ -d "$HOME/.oh-my-zsh" ] || shr \
   'RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' \
@@ -210,12 +220,16 @@ run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || tru
 #     Player + downloader deps already covered (mpv in step 1, yt-dlp above).
 run pip3 install --break-system-packages --user -U yewtube || true
 
-# 10. flatpak + Organic Maps, Session, SimpleX Chat
+# 10. flatpak + Organic Maps, Session, SimpleX Chat, EarTag
+#     EarTag comes from Flathub rather than Debian's `eartag` (trixie ships
+#     0.6.5; upstream is a GNOME Circle app that moves faster than a release
+#     cycle) — and it keeps the whole app set on one update path.
 if have flatpak; then
   run flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
   run flatpak install --user -y flathub app.organicmaps.desktop || true
   run flatpak install --user -y flathub network.loki.Session || true
   run flatpak install --user -y flathub chat.simplex.simplex || true
+  run flatpak install --user -y flathub app.drey.EarTag || true
 fi
 
 # 10b. Claude Code
