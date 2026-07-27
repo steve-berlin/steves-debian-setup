@@ -72,6 +72,7 @@ Workflow is three steps: run it → reboot into the "MX live (frugal, install me
 - **`local dir=$1 probe=$dir` does not work.** Bash expands every word of the `local` line before assigning, so `$dir` reads unset and `set -u` aborts. Split into two statements (already done — don't "tidy" it back).
 - **Secure Boot warning is not cosmetic.** The entry boots an unsigned kernel; with SB enabled the firmware refuses it. Script warns via `mokutil --sb-state` when available.
 - `--dry-run` mounts nothing and creates no tmpdir, so it also skips the ISO-layout and free-space checks — it prints the plan only.
+- **Never boot-tested.** Verified so far: `bash -n`, `--help`, dry install/uninstall, and `rel_bdir`'s mountpoint stripping. The generated GRUB entry has not been booted on real hardware — the params follow antiX's documented frugal `grub.entry` shape but are unproven here. First real use, keep a known-good boot entry reachable.
 
 ### `install-anki.sh` — official upstream tarball
 
@@ -140,6 +141,9 @@ Usage: sessions auto-restore at login because `@continuum-restore 'on'` + the au
 > session switcher). Cut along with the `@plugin` line + `@tmux-expose-*`
 > settings in `backup.tmux.conf`. Recover from git history if wanted back;
 > nothing else depended on it (it only appended a TPM plugin line).
+> **Deployed T480 is still out of sync** with both this and the omt removal:
+> `~/.tmux.conf` remains a symlink to the gpakosz engine and the cargo binary
+> is still at `~/.cargo/bin/tmux-expose`. Tracked in `TODO.md`.
 
 ### `install-tmux-dim.sh` — build patched tmux with inactive-pane dim
 
