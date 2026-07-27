@@ -5,7 +5,7 @@ Personal setup repo for a fresh MX Linux XFCE install on a ThinkPad T480 (Intel 
 ## Layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh, fix-suspend-freeze.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh, fix-suspend-freeze.sh, install-mx-frugal.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-{immortal,expose,dim}.sh
   patches/                  vendored upstream patches (tmux dim)
   discontinued/             not on default path; kept for institutional knowledge
@@ -24,7 +24,7 @@ claude-config/settings.json reference copy of ~/.claude/settings.json (statuslin
 1. `installers/utils.sh` — bulk apt + toolchains + oh-my-zsh + seeds nvim. Everything else assumes this ran.
 2. `installers/check-setup.sh` — verifies step 1. Exit 0 = clean.
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
-4. App installers (each independent): `install-anki.sh`, `install-ly.sh` (Ly DM — prompts before swapping the default DM; verify with `check-ly.sh`), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
+4. App installers (each independent): `install-anki.sh`, `install-mx-frugal.sh` (only when *reinstalling the OS itself* with no USB stick — see its section), `install-ly.sh` (Ly DM — prompts before swapping the default DM; verify with `check-ly.sh`), `fix-suspend-freeze.sh` (systemd suspend/resume login-crash fix — run on any systemd ≥ 256 laptop, not just Ly boxes), `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (each opt-in: KDE needs `plasma-desktop`; nvidia for Intel-iGPU-only boxes). Discontinued: `install-lxqt.sh`, `debloat-xfce.sh`.
 5. Tmux: `tmux_setup/install-tmux-{immortal,expose,dim}.sh`.
 6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`.
 7. `launchers/nic-boost` → `~/.local/bin/`.
@@ -58,6 +58,18 @@ Resolves every dep referenced by `~/.zshrc`: apt packages, oh-my-zsh + plugins, 
 ### `check-setup.sh` — post-bootstrap verifier
 
 Mirrors `utils.sh` step-for-step, prints `[OK]`/`[FAIL]`. Exit 0 if all pass. Run after `utils.sh` or after any system upgrade touching the GPU stack (iGPU/nouveau check catches regression).
+
+### `install-mx-frugal.sh` — install Linux with no USB stick (frugal boot as install medium)
+
+Turns an MX/antiX ISO sitting on disk into a GRUB entry, so a box with no working USB port / no blank media can still reach a live session and run MX's installer. Loop-mounts the ISO, copies its `/antiX` dir (`vmlinuz`, `initrd.gz`, `linuxfs`) to `<target>/<name>/antiX` (default target `/frugal`), writes `/etc/grub.d/42-mx-frugal-<name>`, runs `update-grub`. Modes: bare / `--reinstall` (wipes + recopies the payload) / `--uninstall` / `--dry-run`, plus `--target DIR`, `--name NAME`, `--sha256 SUM|FILE`.
+
+Workflow is three steps: run it → reboot into the "MX live (frugal, install medium)" entry → run the MX installer onto a **different** partition than the one holding the payload → `--uninstall` to drop the entry + files. **No persistence is configured on purpose** — this is a throwaway install medium, not a frugal *system*; live changes stay in the RAM overlay and die at reboot, same as the USB stick it replaces.
+
+- **Boot params are `bdir=` + `buuid=`, not `fromiso=`.** `bdir` = directory holding `linuxfs`, relative to the **partition root** (not `/` — so a payload at `/frugal/MX/antiX` on a separate `/data` mount is `bdir=/frugal/MX/antiX` only when `/data` *is* the mount; `rel_bdir` strips the mountpoint prefix). `buuid` = that partition's filesystem UUID. Same pair antiX's own generated `grub.entry` uses. `from=all` is required — the live-init defaults to `from=usb,cd` and would never probe an internal disk. `fromiso=` (loopback the whole ISO) is avoided: upstream marks it deprecated and it disables live features.
+- **Never formats or repartitions.** Target must already exist and be mounted. `probe_target` hard-fails on non-`ext2/3/4|xfs|vfat` filesystems and on `crypt`/`lvm` device types — GRUB and the live-init both need to reach the payload by plain UUID at boot. Free-space check requires payload size + 256 MiB headroom.
+- **`local dir=$1 probe=$dir` does not work.** Bash expands every word of the `local` line before assigning, so `$dir` reads unset and `set -u` aborts. Split into two statements (already done — don't "tidy" it back).
+- **Secure Boot warning is not cosmetic.** The entry boots an unsigned kernel; with SB enabled the firmware refuses it. Script warns via `mokutil --sb-state` when available.
+- `--dry-run` mounts nothing and creates no tmpdir, so it also skips the ISO-layout and free-space checks — it prints the plan only.
 
 ### `install-anki.sh` — official upstream tarball
 
