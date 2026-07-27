@@ -204,12 +204,18 @@ run cp -a "$nvim_src/." "$HOME/.config/nvim/"
 
 # 9. pip tools
 run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || true
+# 9b. yewtube — terminal YouTube client (mps-youtube successor). Entry point is
+#     `yt`, not `yewtube`. Kept on its own pip line because it pins httpx<0.28:
+#     a resolver conflict there must not take yt-dlp/tldr/platformio with it.
+#     Player + downloader deps already covered (mpv in step 1, yt-dlp above).
+run pip3 install --break-system-packages --user -U yewtube || true
 
-# 10. flatpak + Organic Maps
+# 10. flatpak + Organic Maps, Session, SimpleX Chat
 if have flatpak; then
   run flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
   run flatpak install --user -y flathub app.organicmaps.desktop || true
   run flatpak install --user -y flathub network.loki.Session || true
+  run flatpak install --user -y flathub chat.simplex.simplex || true
 fi
 
 # 10b. Claude Code

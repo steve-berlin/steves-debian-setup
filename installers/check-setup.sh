@@ -65,14 +65,16 @@ have waydroid      && ok "waydroid" || bad "waydroid missing"
 
 # 7. LazyVim + app repos — utils.sh step 8 is commented out; skip the checks.
 
-# 8. pip tools
-for p in yt-dlp tldr platformio; do cbin "$p"; done
+# 8. pip tools. yewtube's entry point is `yt` (utils.sh step 9b).
+for p in yt-dlp tldr platformio yt; do cbin "$p"; done
 
-# 9. flatpak + Organic Maps
+# 9. flatpak + Organic Maps, Session, SimpleX Chat
 have flatpak && flatpak info --user app.organicmaps.desktop >/dev/null 2>&1 \
   && ok "flatpak Organic Maps" || bad "flatpak Organic Maps missing"
 have flatpak && flatpak info --user network.loki.Session >/dev/null 2>&1 \
   && ok "flatpak Session" || bad "flatpak Session missing"
+have flatpak && flatpak info --user chat.simplex.simplex >/dev/null 2>&1 \
+  && ok "flatpak SimpleX Chat" || bad "flatpak SimpleX Chat missing"
 
 # 10. Claude Code + NordVPN
 { have claude || [ -x "$HOME/.local/bin/claude" ]; } && ok "claude" || bad "claude missing"
