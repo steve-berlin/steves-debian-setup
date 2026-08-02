@@ -74,7 +74,7 @@ run $S apt-get install -y --no-install-recommends \
   power-profiles-daemon linux-cpupower default-jre gamemode \
   copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
   xsel xfconf wmctrl gh exiftool btop ncdu \
-  zathura zathura-pdf-mupdf zathura-djvu
+  zathura zathura-pdf-poppler zathura-djvu mupdf
 run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
   run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
 
@@ -105,31 +105,24 @@ if dpkg -l atmel-firmware 2>/dev/null | grep -q '^ii'; then
   fi
 fi
 
-# 1d. dash: repoint /bin/sh to zsh, then purge dash. dash is Essential and owns
-#     the /bin/sh symlink via debconf (dpkg -S /bin/sh finds no package), so the
-#     order is load-bearing: flip the symlink to zsh FIRST — otherwise purge
-#     strands /bin/sh — and pass --allow-remove-essential so apt doesn't stop at
-#     the interactive "Yes, do as I say!" guard. dash's postrm may drop the
-#     symlink, so reassert it afterward. Needs zsh (installed in step 1). Once
-#     /bin/sh is zsh and dash is gone, every step below is a no-op (idempotent).
-#     NOTE: zsh runs /bin/sh in POSIX emulation — fine for system scripts, but a
-#     deliberate, non-default choice; revert with `apt-get install dash` +
-#     `dpkg-reconfigure dash`.
-if dpkg -l dash 2>/dev/null | grep -q '^ii'; then
-  zsh_bin=$(command -v zsh || true)
-  if [ -z "$zsh_bin" ]; then
-    echo "[!] dash kept — zsh not on PATH for /bin/sh" >&2
-  else
-    # Silence dash's debconf so a later reconfigure can't re-grab /bin/sh.
-    run $S sh -c 'echo "dash dash/sh boolean false" | debconf-set-selections'
-    run $S ln -sf "$zsh_bin" /bin/sh
-    run $S apt-get purge -y --allow-remove-essential dash
-    run $S ln -sf "$zsh_bin" /bin/sh
-  fi
-fi
+# 1d. REMOVED — dash stays, and stays as /bin/sh.
+#     An earlier version repointed /bin/sh at zsh and purged dash. It cannot
+#     work and it bricks the box: dash OWNS /bin/sh on trixie (the stale claim
+#     that `dpkg -S /bin/sh` finds no package only holds once dash's .list has
+#     already been truncated by a failed purge — see dash.prerm's
+#     `remove_divert /bin/sh`). So dpkg deletes /bin/sh — including the zsh
+#     symlink planted just before — partway through the purge, then execs
+#     dash.postrm, whose shebang is #!/bin/sh. No interpreter, exit 1, dash
+#     wedged half-installed, /bin/sh gone, every #!/bin/sh script on the system
+#     dead, and `set -e` kills this script before the reassert line can run.
+#     No ordering of those commands survives. Recovery is
+#     `ln -sf /usr/bin/bash /bin/sh` then `apt-get install --reinstall dash`
+#     then `dpkg --configure -a`. Do not reintroduce.
 
-# 1e. foliate: GTK ebook reader, superseded by zathura + the mupdf backend from
-#     step 1 (one keyboard-driven viewer covering EPUB alongside PDF/XPS/CBZ).
+# 1e. foliate: GTK ebook reader, superseded by the standalone `mupdf` viewer
+#     from step 1 (keyboard-driven, covers EPUB/XPS/CBZ next to zathura's PDF).
+#     Load-bearing: if `mupdf` ever leaves the step-1 apt list, drop this purge
+#     in the same commit or the box is left with no EPUB reader at all.
 #     Purge + autoremove --purge to also drop the gjs/webkit stack it pulled in;
 #     nothing else here depends on those, and the autoremove is scoped by apt to
 #     packages left orphaned. Skipped when foliate isn't installed (idempotent).

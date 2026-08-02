@@ -19,7 +19,7 @@ cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 # 1. apt packages
 for p in zsh git curl fzf tmux power-profiles-daemon gamemode copyq flameshot mpv playerctl \
          easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop ncdu \
-         zathura zathura-pdf-mupdf zathura-djvu; do cp_ "$p"; done
+         zathura zathura-pdf-poppler zathura-djvu mupdf; do cp_ "$p"; done
 
 # 1c. atmel-firmware — purged unless an at76c50x device is present (utils.sh 1c).
 if [ -d /sys/bus/usb/drivers/at76c50x_usb ] && ls /sys/bus/usb/drivers/at76c50x_usb 2>/dev/null | grep -qE '^[0-9]'; then
@@ -29,16 +29,10 @@ else
   np atmel-firmware
 fi
 
-# 1d. dash purged + /bin/sh repointed to zsh (utils.sh 1d).
-np dash
+# 1d. removed — utils.sh no longer touches dash or /bin/sh.
 
-# 1e. foliate purged — zathura + mupdf backend covers EPUB (utils.sh 1e).
+# 1e. foliate purged (utils.sh 1e).
 np foliate
-sh_tgt=$(readlink -f /bin/sh 2>/dev/null || true)
-case "$sh_tgt" in
-  */zsh) ok "/bin/sh -> $sh_tgt" ;;
-  *)     bad "/bin/sh -> '$sh_tgt' (want zsh)" ;;
-esac
 
 # 2. oh-my-zsh + plugins
 cd_ "$HOME/.oh-my-zsh"
