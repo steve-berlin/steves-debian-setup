@@ -213,16 +213,20 @@ run pip3 install --break-system-packages --user -U yt-dlp tldr platformio || tru
 #     Player + downloader deps already covered (mpv in step 1, yt-dlp above).
 run pip3 install --break-system-packages --user -U yewtube || true
 
-# 10. flatpak + Organic Maps, Session, SimpleX Chat, EarTag
+# 10. flatpak + Organic Maps, Session, SimpleX Chat, EarTag, Telegram
 #     EarTag comes from Flathub rather than Debian's `eartag` (trixie ships
 #     0.6.5; upstream is a GNOME Circle app that moves faster than a release
-#     cycle) — and it keeps the whole app set on one update path.
+#     cycle) — and it keeps the whole app set on one update path. Telegram is
+#     here for the same reason: Debian's `telegram-desktop` trails upstream and
+#     the server enforces a minimum client version, so a stale build eventually
+#     refuses to connect.
 if have flatpak; then
   run flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
   run flatpak install --user -y flathub app.organicmaps.desktop || true
   run flatpak install --user -y flathub network.loki.Session || true
   run flatpak install --user -y flathub chat.simplex.simplex || true
   run flatpak install --user -y flathub app.drey.EarTag || true
+  run flatpak install --user -y flathub org.telegram.desktop || true
 fi
 
 # 10b. Claude Code
