@@ -3,7 +3,8 @@
 Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap,
 post-install verifier, Anki + Ly display-manager installers, tmux
 power-ups, DE debloaters, NordVPN setup + 6-hourly country rotation,
-and an opt-in WiFi/EEE bandwidth-boost launcher (`nic-boost`).
+a mount-failure diagnoser (`fix-mount.sh`), and an opt-in WiFi/EEE
+bandwidth-boost launcher (`nic-boost`).
 
 Gaming and Redmi-specific scripts have moved to their own repos:
 [steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils)
@@ -21,7 +22,6 @@ git clone https://github.com/steve-berlin/steves-debian-setup ~/steves_debian_se
 cd ~/steves_debian_setup
 
 # 1. bulk bootstrap (apt + toolchains + oh-my-zsh + nvim-config seed)
-#    step 0 offers (y/N) to delete installers/discontinued/ — kept on a piped run
 bash installers/utils.sh
 
 # 2. verify
@@ -30,6 +30,7 @@ bash installers/check-setup.sh
 # 3. app installers — pick what you want
 bash installers/install-anki.sh
 bash installers/install-ly.sh                     # Ly TUI display manager (prompts before swapping default DM)
+bash installers/fix-suspend-freeze.sh             # systemd >= 256 suspend/resume login crash
 
 # 4. debloaters (each opt-in)
 bash debloat_scripts/debloat-mx.sh                # strip MX-bundled apps
@@ -48,10 +49,17 @@ crontab nord-job/nord-rand.cron                   # see CLAUDE.md "nord-job/" se
 # 7. drop launcher and autostarts in place
 install -m 755 launchers/nic-boost ~/.local/bin/
 cp autostarts/*.desktop ~/.config/autostart/
-
-# Discontinued (kept for institutional knowledge — see CLAUDE.md):
-#   installers/discontinued/install-lxqt.sh, debloat-xfce.sh
 ```
+
+Not part of the install flow — run it when a mount fails:
+
+```sh
+# "mount: /dev/sdb: mount point not mounted or bad option."
+installers/fix-mount.sh --dry-run /dev/sdb /mnt/usb   # diagnose only
+installers/fix-mount.sh /dev/sdb /mnt/usb             # diagnose + fix, prompts before each change
+```
+
+Plain-language walkthrough: [`docs/fix-mount-eli11.md`](docs/fix-mount-eli11.md).
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
 and is idempotent. See `CLAUDE.md` for layout, conventions, and the
@@ -60,17 +68,18 @@ per-script details.
 ## Repo layout
 
 ```
-installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, install-mx-frugal.sh, setup_nordvpn.sh
+installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh,
+                            fix-suspend-freeze.sh, fix-mount.sh, install-mx-frugal.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-immortal.sh / -dim.sh
   patches/                  vendored upstream patches (tmux dim)
-  discontinued/             scripts no longer on the default install path
 debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh
 launchers/                  nic-boost
 nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
+docs/                       plain-language (ELI11) walkthroughs, one per script
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
-backup.tmux.conf            reference copy of ~/.tmux.conf (prefix C-a + tpm plugins)
+backup.tmux.conf            stale — live ~/.tmux.conf symlinks into steves-cli-setup
 claude-config/settings.json reference copy of ~/.claude/settings.json (statusline, caveman plugin, effort)
 CLAUDE.md                   single consolidated orientation doc for Claude Code
 ```
