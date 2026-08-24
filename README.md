@@ -1,7 +1,8 @@
 # steves_debian_setup
 
 Personal Debian/MX Linux XFCE setup scripts: bulk bootstrap,
-post-install verifier, Anki + Ly display-manager installers, tmux
+post-install verifier, Anki + Ly display-manager installers, a
+pipx-managed music downloader stack (`install-music-dl.sh`), tmux
 power-ups, DE debloaters, NordVPN setup + 6-hourly country rotation,
 a mount-failure diagnoser (`fix-mount.sh`), and an opt-in WiFi/EEE
 bandwidth-boost launcher (`nic-boost`).
@@ -29,6 +30,7 @@ bash installers/check-setup.sh
 
 # 3. app installers — pick what you want
 bash installers/install-anki.sh
+bash installers/install-music-dl.sh              # pipx: streamrip + spotdl (+ yt-dlp)
 bash installers/install-ly.sh                     # Ly TUI display manager (prompts before swapping default DM)
 bash installers/fix-suspend-freeze.sh             # systemd >= 256 suspend/resume login crash
 
@@ -61,6 +63,19 @@ installers/fix-mount.sh /dev/sdb /mnt/usb             # diagnose + fix, prompts 
 
 Plain-language walkthrough: [`docs/fix-mount-eli11.md`](docs/fix-mount-eli11.md).
 
+`install-music-dl.sh` installs `rip` (streamrip — Qobuz/Tidal/Deezer/SoundCloud,
+needs your own subscription), `spotdl` (Spotify playlists, audio sourced from
+YouTube) and `yt-dlp`, each in its own pipx venv. It writes no credentials:
+run `rip config open` once and fill in the service you pay for.
+
+Caveat on this box: NordVPN autoconnect parks traffic on a shared exit IP, and
+YouTube answers those with "Sign in to confirm you're not a bot". `curl-cffi`
+(installed by the script) clears Cloudflare 403s via `--impersonate chrome`, but
+YouTube's gate needs cookies — `yt-dlp --cookies-from-browser firefox`,
+`spotdl --cookie-file`. So spotdl's audio leg is blocked behind the VPN while its
+Spotify metadata leg works fine. Walkthrough:
+[`docs/install-music-dl-eli11.md`](docs/install-music-dl-eli11.md).
+
 Every installer supports `--dry-run` (prints actions, mutates nothing)
 and is idempotent. See `CLAUDE.md` for layout, conventions, and the
 per-script details.
@@ -69,7 +84,8 @@ per-script details.
 
 ```
 installers/                 utils.sh, check-setup.sh, install-anki.sh, install-ly.sh, check-ly.sh,
-                            fix-suspend-freeze.sh, fix-mount.sh, install-mx-frugal.sh, setup_nordvpn.sh
+                            install-music-dl.sh, fix-suspend-freeze.sh, fix-mount.sh,
+                            install-mx-frugal.sh, setup_nordvpn.sh
   tmux_setup/               install-tmux-immortal.sh / -dim.sh
   patches/                  vendored upstream patches (tmux dim)
 debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh
