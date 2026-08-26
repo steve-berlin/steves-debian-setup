@@ -97,7 +97,9 @@ docs/                       plain-language (ELI11) walkthroughs, one per script
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
 backup.tmux.conf            stale — live ~/.tmux.conf symlinks into steves-cli-setup
 claude-config/settings.json reference copy of ~/.claude/settings.json (statusline, caveman plugin, effort)
-CLAUDE.md                   single consolidated orientation doc for Claude Code
+CLAUDE.md                   orientation doc for Claude Code — layout, install order, conventions.
+                            Per-script detail sits in nested CLAUDE.md files under installers/,
+                            installers/tmux_setup/ and debloat_scripts/
 ```
 
 ## Conventions
