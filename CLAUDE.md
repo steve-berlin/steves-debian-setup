@@ -6,11 +6,14 @@ Personal setup repo for a fresh MX Linux install on a ThinkPad T480 (Intel UHD 6
 
 ```
 installers/       utils.sh check-setup.sh install-anki.sh install-ly.sh check-ly.sh
-                  install-music-dl.sh
-                  fix-suspend-freeze.sh fix-mount.sh install-mx-frugal.sh setup_nordvpn.sh
-  tmux_setup/     install-tmux-{immortal,dim}.sh        patches/  vendored upstream patches
-debloat_scripts/  debloat-{mx,kde,nvidia}.sh            launchers/  nic-boost
-autostarts/       *.desktop for ~/.config/autostart     docs/  ELI11 walkthroughs, one per script
+                  install-music-dl.sh install-mx-frugal.sh setup_nordvpn.sh
+                  fix-suspend-freeze.sh fix-mount.sh            [nested CLAUDE.md]
+  tmux_setup/     install-tmux-{immortal,dim}.sh                [nested CLAUDE.md]
+  patches/        vendored upstream patches (tmux dim)
+debloat_scripts/  debloat-{mx,kde,nvidia}.sh                    [nested CLAUDE.md]
+launchers/        nic-boost
+autostarts/       *.desktop for ~/.config/autostart
+docs/             ELI11 walkthroughs, one per script
 nord-job/         nord-rand + nord-rand.cron (6-hourly NordVPN rotation)
 nvim-config/      vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
 backup.zshrc      reference copy of ~/.zshrc (don't source — tokens stripped)
@@ -18,6 +21,7 @@ backup.tmux.conf  stale — live ~/.tmux.conf symlinks into steves-cli-setup (se
 claude-config/settings.json  reference copy of ~/.claude/settings.json (statusline uses the stable
                   marketplaces path, not the versioned cache hash)
 ```
+Per-script gotchas live in the nested `CLAUDE.md` files marked above — Claude Code loads one only when work touches that directory. New per-script notes go there, not here.
 
 ## Install order on a fresh box
 1. `installers/utils.sh` — bulk apt + toolchains + oh-my-zsh + seeds nvim. Everything else assumes this ran.
@@ -40,12 +44,6 @@ Not on the install path: `fix-mount.sh` — run it when a mount fails.
 
 ## Not in this repo
 Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partitions (`/games/{steam,minecraft}`), Roblox/Steam/Minecraft runtime data, Waydroid/Android-x86 VM state — see sister repos. Live tmux config — see `steves-cli-setup`.
-
-## Per-script detail lives next to the scripts
-Nested `CLAUDE.md` files, loaded automatically when you touch that directory — keep new per-script notes there, not here:
-- `installers/CLAUDE.md` — `utils.sh`, `check-setup.sh`, `install-{anki,music-dl,ly,mx-frugal}.sh`, `check-ly.sh`, `fix-{suspend-freeze,mount}.sh`, `setup_nordvpn.sh`, `patches/`
-- `installers/tmux_setup/CLAUDE.md` — `install-tmux-{immortal,dim}.sh`, and why the deployed box uses none of it
-- `debloat_scripts/CLAUDE.md` — `debloat-{mx,nvidia,kde}.sh`
 
 ## launchers/
 

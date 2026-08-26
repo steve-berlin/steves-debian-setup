@@ -1,5 +1,7 @@
 # installers/
 
+Shared conventions — re-exec guard, `set -euo pipefail`, standard modes, `--dry-run`, the `set -e` AND-list trap, ELI11 docs — are in the root `CLAUDE.md`. This file is per-script gotchas only.
+
 ## `utils.sh` — bulk bootstrap
 
 Resolves every dep referenced by `~/.zshrc`: apt packages, oh-my-zsh + plugins, fzf, user toolchains (rustup, rbenv, atuin, starship, nvm, deno, bun, pyenv), Go + neovim tarballs, third-party installers (brave, waydroid), pip tools, flatpak apps, Claude Code, caveman, NordVPN, tmux config, helper scripts, XFCE + KDE keybindings, EasyEffects presets. Sections 1–15 match `check-setup.sh`'s verification order; step 14 is a no-op stub (debloat moved to `debloat_scripts/`). `shr` helper prints a short summary in `--dry-run` instead of the whole pipe for curl-piped installers + heredoc writes.
