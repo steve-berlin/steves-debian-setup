@@ -1,5 +1,30 @@
 # TODO
 
+## Next up (ordered)
+
+1. **Backfill the missing `docs/<script>-eli11.md` walkthroughs.** Repo convention says
+   every script gets one; 15 of 17 don't have one. Only `fix-mount` and
+   `install-music-dl` are covered. One doc per commit, in install order:
+   `utils.sh` (330 ln) → `check-setup.sh` (157) → `setup_nordvpn.sh` (53) →
+   `install-anki.sh` (73) → `install-music-dl.sh` ✔ → `install-mx-frugal.sh` (240) →
+   `install-ly.sh` (162) → `check-ly.sh` (242) → `fix-suspend-freeze.sh` (101) →
+   `fix-mount.sh` ✔ → `tmux_setup/install-tmux-immortal.sh` (87) →
+   `tmux_setup/install-tmux-dim.sh` (97) → `debloat-mx.sh` (85) →
+   `debloat-kde.sh` (227) → `debloat-nvidia.sh` (87) → `launchers/nic-boost` (60) →
+   `nord-job/nord-rand` (82).
+
+2. **Write a tmux startup speedup script.** `tmux` currently takes ~30 s to reach a
+   usable prompt on the T480 — cause not yet profiled. Note the live config is
+   `~/.tmux.conf` → `~/steves-cli-setup/tmux/tmux.conf` (sister repo, vendored
+   resurrect/continuum, no TPM), so the fix may land in *that* repo while the
+   measure/apply script lands here under `installers/tmux_setup/`. First step is
+   profiling, not patching: time `tmux -f /dev/null new -d` against the real config
+   to separate tmux itself from the config, then bisect the config, then check
+   whether `tmux-resurrect`'s restore hook or a shell rc (`~/.zshrc`, oh-my-zsh
+   plugin load) owns the wait.
+
+## Done
+
 - [x] Add `atmel-firmware` uninstall (with hardware detection to not delete necessary drivers by accident) to `utils.sh`
 - [x] ~~Add `dash` uninstall to `utils.sh`~~ Reverted — step 1d removed. `dash` owns `/bin/sh` on trixie, so the purge deletes `/bin/sh` mid-run and then can't exec its own `#!/bin/sh` postrm; it wedged `dash` half-installed and took `/bin/sh` out on 2026-08-02. Not fixable by reordering. See `CLAUDE.md` steps 1c/1d/1e.
 - [x] ~~Implement `https://github.com/gpakosz/.tmux` to current TMUX setup.~~ Reverted — omt installer + vendored `tmux-config/` cut entirely.
