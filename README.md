@@ -76,6 +76,11 @@ YouTube's gate needs cookies — `yt-dlp --cookies-from-browser firefox`,
 Spotify metadata leg works fine. Walkthrough:
 [`docs/install-music-dl-eli11.md`](docs/install-music-dl-eli11.md).
 
+`utils.sh` is the one step everything else assumes. Walkthrough:
+[`docs/utils-eli11.md`](docs/utils-eli11.md) — what each numbered step
+installs, why step 8 overwrites `~/.config/nvim/`, and what it refuses
+to touch.
+
 Every installer supports `--dry-run` (prints actions, mutates nothing)
 and is idempotent. See `CLAUDE.md` for layout, conventions, and the
 per-script details.
