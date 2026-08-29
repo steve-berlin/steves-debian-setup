@@ -2,16 +2,13 @@
 
 ## Next up (ordered)
 
-1. **Backfill the missing `docs/<script>-eli11.md` walkthroughs.** Repo convention says
-   every script gets one; 15 of 17 were missing when this list was written.
-   ✔ = written. One doc per commit, in install order:
-   `utils.sh` ✔ → `check-setup.sh` ✔ → `setup_nordvpn.sh` ✔ →
-   `install-anki.sh` ✔ → `install-music-dl.sh` ✔ → `install-mx-frugal.sh` (240) →
-   `install-ly.sh` ✔ → `check-ly.sh` ✔ → `fix-suspend-freeze.sh` ✔ →
-   `fix-mount.sh` ✔ → `tmux_setup/install-tmux-immortal.sh` ✔ →
-   `tmux_setup/install-tmux-dim.sh` ✔ → `debloat-mx.sh` ✔ →
-   `debloat-kde.sh` (227) → `debloat-nvidia.sh` ✔ → `launchers/nic-boost` ✔ →
-   `nord-job/nord-rand` ✔.
+1. ~~**Backfill the missing `docs/<script>-eli11.md` walkthroughs.**~~ Done
+   2026-08-29. All 17 scripts now have one: `utils`, `check-setup`,
+   `setup_nordvpn`, `install-anki`, `install-music-dl`, `install-mx-frugal`,
+   `install-ly`, `check-ly`, `fix-suspend-freeze`, `fix-mount`,
+   `install-tmux-immortal`, `install-tmux-dim`, `debloat-mx`, `debloat-kde`,
+   `debloat-nvidia`, `nic-boost`, `nord-rand`. Keep them in sync when a script
+   changes — that is the repo convention, not a one-off.
 
 2. **Write a tmux startup speedup script.** `tmux` currently takes ~30 s to reach a
    usable prompt on the T480 — cause not yet profiled. Note the live config is

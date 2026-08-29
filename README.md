@@ -76,12 +76,13 @@ YouTube's gate needs cookies — `yt-dlp --cookies-from-browser firefox`,
 Spotify metadata leg works fine. Walkthrough:
 [`docs/install-music-dl-eli11.md`](docs/install-music-dl-eli11.md).
 
-`utils.sh` is the one step everything else assumes. Walkthrough:
-[`docs/utils-eli11.md`](docs/utils-eli11.md) — what each numbered step
-installs, why step 8 overwrites `~/.config/nvim/`, and what it refuses
-to touch. `check-setup.sh` grades the result step-for-step and is
-read-only (no flags, safe to re-run):
-[`docs/check-setup-eli11.md`](docs/check-setup-eli11.md).
+**Every script has a plain-language walkthrough in [`docs/`](docs/)**, one
+per script, named `<script>-eli11.md`. Start with
+[`docs/utils-eli11.md`](docs/utils-eli11.md) (what each numbered step
+installs, why step 8 overwrites `~/.config/nvim/`, what it refuses to
+touch) and [`docs/check-setup-eli11.md`](docs/check-setup-eli11.md) (how
+to read its output, and why steps 14–15 fail on a box that only ran
+`utils.sh`).
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
 and is idempotent. See `CLAUDE.md` for layout, conventions, and the
