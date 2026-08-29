@@ -7,7 +7,7 @@
    ✔ = written. One doc per commit, in install order:
    `utils.sh` ✔ → `check-setup.sh` ✔ → `setup_nordvpn.sh` ✔ →
    `install-anki.sh` ✔ → `install-music-dl.sh` ✔ → `install-mx-frugal.sh` (240) →
-   `install-ly.sh` (162) → `check-ly.sh` (242) → `fix-suspend-freeze.sh` (101) →
+   `install-ly.sh` ✔ → `check-ly.sh` ✔ → `fix-suspend-freeze.sh` ✔ →
    `fix-mount.sh` ✔ → `tmux_setup/install-tmux-immortal.sh` (87) →
    `tmux_setup/install-tmux-dim.sh` (97) → `debloat-mx.sh` (85) →
    `debloat-kde.sh` (227) → `debloat-nvidia.sh` (87) → `launchers/nic-boost` ✔ →
