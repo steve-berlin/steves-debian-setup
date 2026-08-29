@@ -79,7 +79,9 @@ Spotify metadata leg works fine. Walkthrough:
 `utils.sh` is the one step everything else assumes. Walkthrough:
 [`docs/utils-eli11.md`](docs/utils-eli11.md) — what each numbered step
 installs, why step 8 overwrites `~/.config/nvim/`, and what it refuses
-to touch.
+to touch. `check-setup.sh` grades the result step-for-step and is
+read-only (no flags, safe to re-run):
+[`docs/check-setup-eli11.md`](docs/check-setup-eli11.md).
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
 and is idempotent. See `CLAUDE.md` for layout, conventions, and the

@@ -5,7 +5,7 @@
 1. **Backfill the missing `docs/<script>-eli11.md` walkthroughs.** Repo convention says
    every script gets one; 15 of 17 were missing when this list was written.
    ✔ = written. One doc per commit, in install order:
-   `utils.sh` ✔ → `check-setup.sh` (157) → `setup_nordvpn.sh` (53) →
+   `utils.sh` ✔ → `check-setup.sh` ✔ → `setup_nordvpn.sh` (53) →
    `install-anki.sh` (73) → `install-music-dl.sh` ✔ → `install-mx-frugal.sh` (240) →
    `install-ly.sh` (162) → `check-ly.sh` (242) → `fix-suspend-freeze.sh` (101) →
    `fix-mount.sh` ✔ → `tmux_setup/install-tmux-immortal.sh` (87) →
