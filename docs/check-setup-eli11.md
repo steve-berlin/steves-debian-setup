@@ -84,6 +84,11 @@ install path, because a fresh install isn't on `PATH` until you reopen the shell
 
 **6.** Brave and Waydroid.
 
+**7.** The neovim config seeded from the repo's `nvim-config/` folder. It looks
+for two files, `init.lua` and `lazy-lock.json`, rather than just the folder —
+because `utils.sh` deletes `~/.config/nvim/` before copying, a folder that
+exists but is missing the lockfile means the copy died halfway.
+
 **8.** The pip tools: `yt-dlp`, `tldr`, `platformio`, and `yt` — which is
 yewtube's command name. Looking for a command called `yewtube` would fail
 forever; there isn't one.
@@ -95,6 +100,11 @@ your account, and a system-wide query wouldn't see them.
 **10.** Claude Code, NordVPN, and — separately — whether **you** are in the
 `nordvpn` group. That last one is the check people trip over: the group is added
 during install but does not apply until you log out and back in.
+
+**10b′.** The caveman plugin, checked by the flag file it leaves at
+`~/.claude/.caveman-active`. It is a Claude Code plugin, not a program, so
+there is no command on `PATH` to look for — the flag file is the same thing
+`utils.sh` itself uses to decide whether it already installed it.
 
 **11.** That `~/.tmux.conf` really says `set -g prefix C-a`.
 
@@ -115,6 +125,11 @@ first field starts with `Meta+K` and ignores whatever Plasma appended.
 no nvidia or nouveau kernel module should be loaded; and if `glxinfo` is
 available, the graphics renderer should be the Intel chip rather than an NVIDIA
 one.
+
+**16.** The EasyEffects presets. It checks that `~/.config/easyeffects/output`
+contains at least one `.json` file, not merely that the folder is there —
+EasyEffects creates that folder itself on first launch, so an empty one would
+otherwise pass while the presets never landed.
 
 ## The one confusing result
 
@@ -144,19 +159,6 @@ verdict and the script keeps going, so one run gives you the complete picture.
 
 The exit code comes from the very last line, `[ "$F" -eq 0 ]`: zero failures,
 exit 0; otherwise exit 1.
-
-## Two gaps worth knowing about
-
-The script does not currently verify:
-
-- **Step 8**, the neovim config seeded from `nvim-config/`. A stale comment in
-  the file says step 8 is "commented out" in `utils.sh` — it isn't any more, so
-  this is an untested step rather than a deliberate skip.
-- **The caveman plugin** (`utils.sh` step 10b′) and the **EasyEffects presets**
-  (step 15).
-
-Nothing breaks because of this; the checks simply aren't there yet. If a run
-comes back all-green, those three items are the ones it did not actually look at.
 
 ## Exit codes
 

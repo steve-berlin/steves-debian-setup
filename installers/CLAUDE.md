@@ -20,7 +20,11 @@ Resolves every dep referenced by `~/.zshrc`: apt packages, oh-my-zsh + plugins, 
 
 ## `check-setup.sh` — post-bootstrap verifier
 
-Mirrors `utils.sh` step-for-step, prints `[OK]`/`[FAIL]`, exit 0 if all pass. Run after `utils.sh` or after any upgrade touching the GPU stack (the iGPU/nouveau check catches regressions).
+Mirrors `utils.sh` step-for-step, prints `[OK]`/`[FAIL]`, exit 0 if all pass. Run after `utils.sh` or after any upgrade touching the GPU stack (the iGPU/nouveau check catches regressions). No flags, no args, read-only. Walkthrough: `docs/check-setup-eli11.md`. **`set -u` only, not `set -euo pipefail`** — a failed check is the result, not a script error; `set -e` would abort at the first missing package and swallow the other ~80 answers. Exit status is the trailing `[ "$F" -eq 0 ]`.
+- **Steps 14–15 fail by design on a box that only ran `utils.sh`.** They assert debloat results (gimp/vlc/nvidia gone, nouveau blacklisted, iGPU renderer) and debloat is opt-in in `debloat_scripts/`. Not a bug; the exit code is still 1.
+- **Step 7 checks `~/.config/nvim/{init.lua,lazy-lock.json}`, not the directory** — `utils.sh` step 8 `rm -rf`s the directory first, so a directory that exists without the lockfile means the `cp -a` died mid-copy. (Added 2026-08-29; the old comment claiming step 8 was "commented out" was stale.)
+- **Step 16 requires at least one `*.json` under `~/.config/easyeffects/output`**, not just the directory — EasyEffects creates that directory itself on first launch, so a bare-directory check would pass with no presets installed.
+- **caveman is checked by its `~/.claude/.caveman-active` flag file**, mirroring `utils.sh`'s own idempotency guard — it's a plugin, not a PATH binary.
 
 ## `install-mx-frugal.sh` — install Linux with no USB stick (frugal boot as install medium)
 

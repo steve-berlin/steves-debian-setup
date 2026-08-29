@@ -60,7 +60,12 @@ cf "$HOME/.nvim/bin/nvim"
 have brave-browser && ok "brave"    || bad "brave missing"
 have waydroid      && ok "waydroid" || bad "waydroid missing"
 
-# 7. LazyVim + app repos — utils.sh step 8 is commented out; skip the checks.
+# 7. LazyVim config seeded from vendored nvim-config/ (utils.sh step 8).
+#    Step 8 rm -rf's ~/.config/nvim and cp -a's the repo copy in, so both the
+#    entry point and the lockfile must be there; a bare directory means the
+#    copy died halfway.
+cf "$HOME/.config/nvim/init.lua"
+cf "$HOME/.config/nvim/lazy-lock.json"
 
 # 8. pip tools. yewtube's entry point is `yt` (utils.sh step 9b).
 for p in yt-dlp tldr platformio yt; do cbin "$p"; done
@@ -82,6 +87,11 @@ have flatpak && flatpak info --user org.telegram.desktop >/dev/null 2>&1 \
 have nordvpn && ok "nordvpn" || bad "nordvpn missing"
 getent group nordvpn 2>/dev/null | grep -q "\b$USER\b" \
   && ok "user in nordvpn group" || bad "user NOT in nordvpn group"
+
+# 10b'. caveman Claude Code plugin (utils.sh step 10b'). The installer drops
+#       this flag file into ~/.claude; utils.sh uses it as its own idempotency
+#       guard, so it is the same thing to assert here. Not a PATH binary.
+cf "$HOME/.claude/.caveman-active"
 
 # 11. tmux prefix = C-a (utils.sh writes `prefix C-a` into ~/.tmux.conf).
 grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$HOME/.tmux.conf" 2>/dev/null \
@@ -150,6 +160,16 @@ if have glxinfo; then
   esac
 else
   printf '[--]   glxinfo missing — skipping renderer check (apt install mesa-utils)\n'
+fi
+
+# 16. EasyEffects presets (utils.sh step 15). The upstream installer writes
+#     preset JSON into ~/.config/easyeffects/{output,input}; an empty directory
+#     means EasyEffects itself created it and the presets never landed.
+ee="$HOME/.config/easyeffects/output"
+if [ -d "$ee" ] && ls "$ee"/*.json >/dev/null 2>&1; then
+  ok "easyeffects presets in $ee"
+else
+  bad "easyeffects presets missing in $ee"
 fi
 
 echo
