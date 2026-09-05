@@ -33,7 +33,9 @@
    plain binaries), and `nvm.sh` is deferred behind an `nvm()` stub that
    `unfunction`s itself on first call. **Shell start 1836 ms -> 296 ms**, paid
    per pane. nvm no longer appears in the profiler's top offenders; `rbenv init`
-   (73 ms) is now the largest, not worth chasing yet. Trade-off accepted: no
+   was then the largest at 73 ms, and got the same treatment the same day
+   (shims on `PATH` + a self-removing `rbenv()` stub): **296 ms -> 216 ms**.
+   Shell rc cost is now 205 ms over a 15 ms floor, with no single dominant line. Trade-off accepted: no
    `.nvmrc` auto-switch on `cd`, and "newest installed" wins over the `default`
    alias — both moot with one version installed.
 
