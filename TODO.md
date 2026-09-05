@@ -28,14 +28,23 @@
    once per pane** — 5 panes ≈ 9 s, roughly two thirds of the wait. Remaining
    work is the fix itself, below.
 
-3. **Lazy-load nvm in `~/.zshrc.local`.** Replace the eager
-   `source "$NVM_DIR/nvm.sh"` with a static `PATH` entry for the default Node
-   plus `nvm`/`node`/`npm`/`npx` stub functions that source the real init on
-   first call. Not scriptable from this repo: `~/.zshrc.local` is untracked and
-   lives in no repo (`~/.zshrc` is a symlink onto tracked
-   `steves-cli-setup/zsh/zshrc` — do not edit that). Decide first whether
-   `~/.zshrc.local` should move into `steves-cli-setup` under a machine name;
-   it currently holds a `GH_TOKEN`, so it cannot be committed as-is.
+3. ~~**Lazy-load nvm in `~/.zshrc.local`.**~~ Done 2026-09-05. Newest installed
+   version's bin goes straight on `PATH` (so `node`/`npm`/`npx`/`corepack` are
+   plain binaries), and `nvm.sh` is deferred behind an `nvm()` stub that
+   `unfunction`s itself on first call. **Shell start 1836 ms -> 296 ms**, paid
+   per pane. nvm no longer appears in the profiler's top offenders; `rbenv init`
+   (73 ms) is now the largest, not worth chasing yet. Trade-off accepted: no
+   `.nvmrc` auto-switch on `cd`, and "newest installed" wins over the `default`
+   alias — both moot with one version installed.
+
+   Still unresolved from this item: **`~/.zshrc.local` lives in no repo.** It is
+   155 lines of real config (`PATH`, completions, all five toolchains, atuin,
+   aliases) and one disk failure from gone. `backup.zshrc` here is a stripped
+   copy of the *pre-symlink* `~/.zshrc` — a different file, and stale. Options:
+   leave untracked; track it in `steves-cli-setup` as `zsh/local/t480.zshrc`
+   with `~/.zshrc.local` symlinking to it (preferred); or refresh the stripped
+   copy here. No longer blocked — the `GH_TOKEN` that made it uncommittable was
+   removed and revoked on 2026-09-05.
 
 ## Done
 
