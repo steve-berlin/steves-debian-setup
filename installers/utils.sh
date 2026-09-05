@@ -322,7 +322,12 @@ fi
 
 [ -f "$HOME/wallchange.py" ] || echo "[!] ~/wallchange.py missing (referenced by .zshrc)" >&2
 echo "[✓] done — run 'claude login' and 'nordvpn login'; log out/in for nordvpn group"
-echo "[!] rotate GH_TOKEN/ANTHROPIC_API_TOKEN in ~/.zshrc; line 2 points at /home/alex"
+# Credentials belong in a tool's own store, not a shell rc. ~/.zshrc is a
+# symlink into steves-cli-setup, so a token pasted there is one `git commit -a`
+# from GitHub; ~/.zshrc.local is untracked but still world-readable plaintext.
+echo "[!] no API tokens in ~/.zshrc or ~/.zshrc.local — \`gh auth login\` stores"
+echo "    GitHub creds in ~/.config/gh/hosts.yml (0600); \`claude login\` its own."
+echo "    check: grep -nE '_TOKEN=|_KEY=' ~/.zshrc.local ~/.zshrc"
 echo "[i] next: bash installers/debloat-mx.sh && bash installers/debloat-nvidia.sh"
 
 # 15. EasyEffects presets
