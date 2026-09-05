@@ -12,6 +12,15 @@ Drops `~/.tmux/plugins/{tpm,tmux-resurrect,tmux-continuum}`; `~/.tmux.conf` (onl
 
 Usage: sessions auto-restore at login via `@continuum-restore 'on'` + the autostart `.desktop`. Manual save `prefix + Ctrl-s`, restore `prefix + Ctrl-r`. State at `~/.tmux/resurrect/last` (+ `pane_contents.tar.gz` from `@resurrect-capture-pane-contents 'on'`). Re-attach with `tmux a`; `tmux ls` shows `main` plus restored sessions.
 
+## `profile-tmux-startup.sh` — measure why tmux is slow to a prompt
+
+Read-only diagnostic; **no `--dry-run`/`--reinstall`/`--uninstall`** (nothing to undo), bare or `--help` only, unknown arg exits 2. Unlike the two installers above, this one *is* relevant to the deployed box — it profiles whatever `~/.tmux.conf` resolves to, i.e. the `steves-cli-setup` config. Times: bare tmux (`-f /dev/null`), config with `run-shell` stripped, full config; then `$SHELL -f -i` (floor) vs `-i`; then xtrace-attributes the slowest rc lines; then counts panes in the newest resurrect save and sums the restore scripts' literal sleeps. Prints a budget + ranked advice.
+- **Every measurement runs on `tmux -L profile_$$`**, killed by an `EXIT INT TERM` trap. The live default-socket server is never contacted. Safe to run with work open — keep it that way.
+- **`best_tmux_ms` kills the server between each of its 3 iterations.** A second `new-session` against a live server reuses it and skips config parse *and* every `run-shell`; the first draft did this and reported plugin load as 23 ms instead of 1137 ms. Do not "optimize" the kill away.
+- **Restore is deliberately not timed.** Continuum's `another_tmux_server_running_on_startup` guard suppresses auto-restore whenever a second server exists, so it can never fire on the throwaway socket while the real one lives. Hence the sleep floor is *computed* from the save file (`1000` continuum + `2000 + 1300*n_ai` assistant-resurrect), not measured. Timing it for real would mean killing the user's sessions.
+- **`|| true` after `head -6`** — head closes the pipe, sort takes SIGPIPE, `pipefail` propagates, `set -e` exits 141 before the report ever prints. Cost one debug cycle; the repo's AND-list rule has a SIGPIPE sibling.
+- **Findings on the T480 (2026-09-05)**: shell 1836 ms of which ~1530 is eager `nvm.sh` in `~/.zshrc.local`, paid *per pane*; plugin load 852 ms; restore sleeps 4300 ms. nvm dominates. Fix belongs in `~/.zshrc.local` (untracked, sourced by the sister repo on purpose) — never in `~/.zshrc`, which is a symlink onto tracked `steves-cli-setup/zsh/zshrc`.
+
 ## `install-tmux-dim.sh` — build patched tmux with inactive-pane dim
 
 Builds tmux 3.5a from source with `patches/tmux-dim-inactive-panes.patch` (chud-methodology) into `/usr/local/bin/tmux`, shadowing `/usr/bin/tmux`. Dims every cell of inactive panes: 30% perceptual-luma desaturation + 35% blend toward pane bg. Works for arbitrary ANSI content (lazygit, syntax highlighting) — `window-style` alone only touches cells using terminal default colors. No runtime knobs; factors are baked into the patch. `--uninstall` removes the `/usr/local` binary only. Override with `TMUX_VERSION=3.5a`.

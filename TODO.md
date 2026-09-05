@@ -10,15 +10,32 @@
    `debloat-nvidia`, `nic-boost`, `nord-rand`. Keep them in sync when a script
    changes — that is the repo convention, not a one-off.
 
-2. **Write a tmux startup speedup script.** `tmux` currently takes ~30 s to reach a
-   usable prompt on the T480 — cause not yet profiled. Note the live config is
-   `~/.tmux.conf` → `~/steves-cli-setup/tmux/tmux.conf` (sister repo, vendored
-   resurrect/continuum, no TPM), so the fix may land in *that* repo while the
-   measure/apply script lands here under `installers/tmux_setup/`. First step is
-   profiling, not patching: time `tmux -f /dev/null new -d` against the real config
-   to separate tmux itself from the config, then bisect the config, then check
-   whether `tmux-resurrect`'s restore hook or a shell rc (`~/.zshrc`, oh-my-zsh
-   plugin load) owns the wait.
+2. ~~**Write a tmux startup speedup script.**~~ Done 2026-09-05, scoped to
+   measure-only: `installers/tmux_setup/profile-tmux-startup.sh` +
+   `docs/profile-tmux-startup-eli11.md`. It reports and advises; it changes
+   nothing. Profiled result on the T480 — tmux itself is not the problem:
+
+   | stage | cost |
+   |---|---|
+   | bare `tmux -f /dev/null` | 96 ms |
+   | + config parsed, `run-shell` stripped | 134 ms |
+   | + plugins loaded | 1137 ms |
+   | `zsh -f -i` (no rc, the floor) | 16 ms |
+   | `zsh -i` (real rc) | 1836 ms |
+   | restore sleeps (computed) | 4300 ms |
+
+   **Eager `nvm.sh` in `~/.zshrc.local` is ~1530 ms of that shell time, paid
+   once per pane** — 5 panes ≈ 9 s, roughly two thirds of the wait. Remaining
+   work is the fix itself, below.
+
+3. **Lazy-load nvm in `~/.zshrc.local`.** Replace the eager
+   `source "$NVM_DIR/nvm.sh"` with a static `PATH` entry for the default Node
+   plus `nvm`/`node`/`npm`/`npx` stub functions that source the real init on
+   first call. Not scriptable from this repo: `~/.zshrc.local` is untracked and
+   lives in no repo (`~/.zshrc` is a symlink onto tracked
+   `steves-cli-setup/zsh/zshrc` — do not edit that). Decide first whether
+   `~/.zshrc.local` should move into `steves-cli-setup` under a machine name;
+   it currently holds a `GH_TOKEN`, so it cannot be committed as-is.
 
 ## Done
 
