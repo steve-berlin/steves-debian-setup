@@ -160,6 +160,45 @@ verdict and the script keeps going, so one run gives you the complete picture.
 The exit code comes from the very last line, `[ "$F" -eq 0 ]`: zero failures,
 exit 0; otherwise exit 1.
 
+## The credential scan (step 17)
+
+The last check is not about your setup at all. It looks for passwords and API
+tokens sitting in your shell startup files.
+
+Why those files. When you open a terminal, the shell reads a few files and runs
+whatever is in them. People paste tokens there because it is easy — the token
+is then set in every shell without thinking about it. The problem is that these
+are plain text files with no protection, and on this machine `~/.zshrc` is not
+even a real file. It is a shortcut pointing into the `steves-cli-setup` git
+repository. So a token pasted into `~/.zshrc` is really a token pasted into a
+file git is tracking, and the next `git commit -a` publishes it. That is not
+hypothetical; it happened on 2026-09-05.
+
+What it looks for, in two groups:
+
+1. **Shapes it recognises.** GitHub tokens start with `ghp_`, `gho_`, `ghu_`,
+   `ghs_`, `ghr_` or `github_pat_`. Anthropic keys start with `sk-ant-`. AWS
+   keys start with `AKIA`. These are near-certain.
+2. **Names that suggest a secret** — anything ending `_TOKEN`, `_KEY`,
+   `_SECRET`, or called `PASSWORD` — but only when the value is a bare word.
+
+That second condition is the whole trick for avoiding false alarms.
+`API_TOKEN="$FROM_SOMEWHERE_ELSE"` starts with a quote, so it is not a pasted
+secret. `API_TOKEN=` and `API_TOKEN=""` hold nothing. Only a value beginning
+with a letter or digit looks like something you pasted, and only that is
+reported.
+
+Commented-out lines are ignored, but they are removed *after* the line numbers
+are attached, so the numbers it prints still match what you see in your editor.
+
+**It never prints the secret itself** — only the file and the line numbers. A
+check that shouted your token across the terminal would be worse than the
+problem it found.
+
+If it fails, open the file at those lines and move the value into whatever
+store the tool provides. For GitHub that is `gh auth login`, which writes to
+`~/.config/gh/hosts.yml` with permissions that let only you read it.
+
 ## Exit codes
 
 | Code | Meaning |

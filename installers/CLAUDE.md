@@ -25,6 +25,7 @@ Mirrors `utils.sh` step-for-step, prints `[OK]`/`[FAIL]`, exit 0 if all pass. Ru
 - **Step 7 checks `~/.config/nvim/{init.lua,lazy-lock.json}`, not the directory** — `utils.sh` step 8 `rm -rf`s the directory first, so a directory that exists without the lockfile means the `cp -a` died mid-copy. (Added 2026-08-29; the old comment claiming step 8 was "commented out" was stale.)
 - **Step 16 requires at least one `*.json` under `~/.config/easyeffects/output`**, not just the directory — EasyEffects creates that directory itself on first launch, so a bare-directory check would pass with no presets installed.
 - **caveman is checked by its `~/.claude/.caveman-active` flag file**, mirroring `utils.sh`'s own idempotency guard — it's a plugin, not a PATH binary.
+- **Step 17 is a credential scan, not a setup check.** Greps the six shell rc files for known token shapes (`gh[pousr]_`, `github_pat_`, `sk-ant-`, `AKIA`) plus any `*_TOKEN|_KEY|_SECRET|PASSWORD=` whose value starts alphanumeric — that last condition is what suppresses `FOO="$BAR"`, `FOO=` and `FOO=""`. Comments are filtered *after* `grep -n` so reported line numbers stay real. **Prints line numbers only, never values.** Exists because `~/.zshrc` symlinks into `steves-cli-setup`, making a token pasted there a tracked file — that happened 2026-09-05, and on its first run the scan found a second, unrelated PAT in `~/.zshrc.local`.
 
 ## `install-mx-frugal.sh` — install Linux with no USB stick (frugal boot as install medium)
 
