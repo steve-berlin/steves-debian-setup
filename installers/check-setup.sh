@@ -172,6 +172,33 @@ else
   bad "easyeffects presets missing in $ee"
 fi
 
+# 17. credential scan. utils.sh closes by telling you to keep API tokens out of
+#     the shell rc files; this is that reminder made checkable. It matters most
+#     for ~/.zshrc, which is a symlink into steves-cli-setup — a token pasted
+#     there lands in a *tracked* file, one `git commit -a` from GitHub. That is
+#     exactly how a GH_TOKEN ended up staged there on 2026-09-05.
+#
+#     Two kinds of match: known token shapes (GitHub, Anthropic, AWS), and any
+#     *_TOKEN/_KEY/_SECRET/PASSWORD assigned a bare literal. Requiring the value
+#     to start alphanumeric is what keeps `FOO_TOKEN="$BAR"`, `FOO_KEY=` and
+#     quoted empties from crying wolf. Line numbers only — never the value.
+SECRET_RE='gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}'
+SECRET_RE="$SECRET_RE"'|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}'
+SECRET_RE="$SECRET_RE"'|(_TOKEN|_KEY|_SECRET|PASSWORD)=[A-Za-z0-9]'
+sec_bad=0
+for rc in "$HOME/.zshrc" "$HOME/.zshrc.local" "$HOME/.zshenv" "$HOME/.zprofile" \
+          "$HOME/.profile" "$HOME/.bashrc"; do
+  [ -f "$rc" ] || continue
+  # -n first so the numbers are the real ones, then drop commented hits.
+  hits=$(grep -nE "$SECRET_RE" "$rc" 2>/dev/null \
+         | grep -vE '^[0-9]+:[[:space:]]*#' | cut -d: -f1 | tr '\n' ' ')
+  if [ -n "$hits" ]; then
+    bad "secret in $rc — line(s): ${hits% }"
+    sec_bad=1
+  fi
+done
+[ "$sec_bad" -eq 0 ] && ok "no credential-shaped lines in shell rc files"
+
 echo
 printf 'Passed: %d  Failed: %d\n' "$P" "$F"
 [ "$F" -eq 0 ]
