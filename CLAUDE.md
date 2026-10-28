@@ -54,9 +54,9 @@ Runtime-only NIC tweaks for bandwidth-heavy work. They cost battery *exactly whe
 ## autostarts/
 
 `.desktop` autostart files for `~/.config/autostart/` (per user) or `/etc/xdg/autostart/` (system). Written for XFCE (which runs `Exec=` and honors `X-GNOME-Autostart-enabled=true` despite the prefix); Plasma reads the same directory.
-- **`alacritty-autostart.desktop`**: `alacritty --gapplication-service` so later invocations attach to the running service. `Hidden=true` + `NoDisplay=true` keep it out of the application menu so it can't be toggled off by accident in Session and Startup.
+- **`alacritty-autostart.desktop`**: `alacritty --daemon` keeps one process alive with no window; `alacritty msg create-window` opens windows in it (plain `alacritty` still starts a fresh process). Not `--gapplication-service` — alacritty isn't a GApplication and exits `unexpected argument`. Bare `alacritty` in `Exec=` (no `/usr/bin/`) so a cargo build in `~/.local/bin` (utils.sh 4b) also resolves. `NoDisplay=true` keeps it out of the menu; `Hidden=` must stay `false` — per the autostart spec `Hidden=true` means "deleted" and the entry never runs.
 - **`brave-autostart.desktop`**: `brave-browser` at login. Disable on low-RAM machines.
-- **`easyeffects.desktop`**: same `--gapplication-service` pattern. Required for presets (EQ, autogain) to apply to every audio stream from session start.
+- **`easyeffects.desktop`**: `easyeffects --gapplication-service` (valid here — EasyEffects *is* a GApplication) starts it windowless; later launches attach to the running service. Required for presets (EQ, autogain) to apply to every audio stream from session start.
 
 `nohup` in `Exec=` is defensive — the DE detaches autostart already, but it shields against a stray HUP from the launching shell. A trailing `&` is spec-ignored but harmless.
 
