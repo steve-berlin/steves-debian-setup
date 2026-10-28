@@ -18,8 +18,15 @@ cbin(){ have "$1"   && ok "bin  $1" || bad "bin  $1 not in PATH"; }
 
 # 1. apt packages
 for p in zsh git curl fzf tmux power-profiles-daemon gamemode copyq flameshot mpv playerctl \
-         easyeffects alacritty cryptsetup flatpak xsel xfconf wmctrl btop ncdu \
+         ncurses-term cryptsetup flatpak xsel xfconf wmctrl btop ncdu \
          zathura zathura-pdf-poppler zathura-djvu mupdf; do cp_ "$p"; done
+
+# 1a. Distro-dependent installs (utils.sh 1a/4b). cpupower and alacritty are
+#     checked as binaries: Ubuntu ships cpupower in linux-tools, and alacritty
+#     may be a cargo build in ~/.local/bin rather than a package.
+cbin cpupower
+cbin alacritty
+for p in easyeffects lsp-plugins-lv2 mda-lv2 zam-plugins; do cp_ "$p"; done
 
 # 1c. atmel-firmware — purged unless an at76c50x device is present (utils.sh 1c).
 if [ -d /sys/bus/usb/drivers/at76c50x_usb ] && ls /sys/bus/usb/drivers/at76c50x_usb 2>/dev/null | grep -qE '^[0-9]'; then

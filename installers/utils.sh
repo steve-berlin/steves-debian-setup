@@ -26,6 +26,10 @@ for a in "$@"; do
 done
 
 have() { command -v "$1" >/dev/null 2>&1; }
+# apt has an installable version of $1. `apt-cache madison` prints nothing for
+# an unknown or candidate-less name and its output isn't localized (unlike
+# `apt-cache policy`, whose "Candidate:" line is translated on this box).
+apt_has() { [ -n "$(apt-cache madison "$1" 2>/dev/null)" ]; }
 run() { ((dry)) && printf 'DRY  %s\n' "$*" || "$@"; }
 # curl|sh installers are opaque in dry-run; print a short summary instead of
 # rendering the whole pipe.
@@ -71,12 +75,47 @@ run $S apt-get install -y --no-install-recommends \
   zsh git curl wget unzip ca-certificates build-essential python3 python3-pip fzf tmux \
   autoconf bison libssl-dev libreadline-dev zlib1g-dev libyaml-dev libncurses-dev \
   libffi-dev libgdbm-dev libdb-dev uuid-dev \
-  power-profiles-daemon linux-cpupower default-jre gamemode \
-  copyq flameshot mpv rename playerctl easyeffects alacritty cryptsetup flatpak \
+  power-profiles-daemon default-jre gamemode ncurses-term \
+  copyq flameshot mpv rename playerctl cryptsetup flatpak \
   xsel xfconf wmctrl gh exiftool btop ncdu \
   zathura zathura-pdf-poppler zathura-djvu mupdf
 run $S apt-get install -y --no-install-recommends "linux-tools-$(uname -r)" 2>/dev/null ||
   run $S apt-get install -y --no-install-recommends linux-perf 2>/dev/null || true
+
+# 1a. Packages whose name or availability differs per distro/release. Kept off
+#     the step-1 line: one name with no candidate aborts that whole
+#     `apt-get install` under set -e and nothing in step 1 lands.
+#     cpupower: Debian/MX ship it as `linux-cpupower`; Ubuntu has no such
+#     package and puts the binary in linux-tools-$(uname -r) (line above).
+#     Not pinned to the running kernel's version — the tool is
+#     backward-compatible, and Liquorix kernels have no matching package.
+if apt_has linux-cpupower; then
+  run $S apt-get install -y --no-install-recommends linux-cpupower
+elif ! have cpupower; then
+  echo "[!] cpupower unavailable — no linux-cpupower package and linux-tools didn't provide it" >&2
+fi
+#     easyeffects: Debian's build only *Recommends* its effect plugins, so
+#     --no-install-recommends gives an EasyEffects with no effects (MX's build
+#     Depends on them; naming them is a no-op there). `lsp-plugins-lv2` is the
+#     preferred member of the lsp|calf alternative — calf drags in GTK2.
+if apt_has easyeffects; then
+  run $S apt-get install -y --no-install-recommends \
+    easyeffects lsp-plugins-lv2 mda-lv2 zam-plugins
+else
+  echo "[!] easyeffects unavailable in apt — skipped (step 15 presets need it)" >&2
+fi
+#     alacritty: not in every release's repos (bookworm-based MX 23 has none).
+#     No candidate -> build from crates.io after rustup lands in step 4.
+build_alacritty=0
+if apt_has alacritty; then
+  run $S apt-get install -y --no-install-recommends alacritty
+elif ! have alacritty; then
+  build_alacritty=1
+  # Build deps per alacritty's INSTALL.md (Debian section).
+  run $S apt-get install -y --no-install-recommends \
+    cmake g++ pkg-config libfreetype-dev libfontconfig1-dev \
+    libxcb-xfixes0-dev libxkbcommon-dev python3
+fi
 
 # 1b. Steam (needs i386 + non-free; best-effort)
 run $S dpkg --add-architecture i386 2>/dev/null || true
@@ -167,6 +206,30 @@ have starship || shr "curl -sS https://starship.rs/install.sh | sh -s -- -y" \
   "install bun via curl | bash"
 [ -d "$HOME/.pyenv" ] || shr "curl -fsSL https://pyenv.run | bash || true" \
   "install pyenv via curl | bash"
+
+# 4b. alacritty from source (only when step 1a found no apt candidate).
+#     --root ~/.local puts the binary in ~/.local/bin, which is on the login
+#     PATH (~/.profile), so the autostart's bare `alacritty` resolves. Terminfo
+#     comes from ncurses-term (step 1). Absolute cargo path: ~/.cargo/bin
+#     isn't on this script's PATH right after rustup's --no-modify-path.
+if ((build_alacritty)); then
+  run "$HOME/.cargo/bin/cargo" install --locked --root "$HOME/.local" alacritty
+  if ((dry)); then
+    echo "DRY  write $HOME/.local/share/applications/Alacritty.desktop"
+  else
+    mkdir -p "$HOME/.local/share/applications"
+    cat >"$HOME/.local/share/applications/Alacritty.desktop" <<EOS
+[Desktop Entry]
+Type=Application
+Name=Alacritty
+Comment=A fast, cross-platform, OpenGL terminal emulator
+Exec=$HOME/.local/bin/alacritty
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+EOS
+  fi
+fi
 
 # 5. go (tarball)
 if [ ! -x "$HOME/.local/go/bin/go" ]; then
