@@ -48,6 +48,14 @@
    copy here. No longer blocked — the `GH_TOKEN` that made it uncommittable was
    removed and revoked on 2026-09-05.
 
+4. **Replace the ELI11 markdown docs with detailed in-script comments.** Move
+   each `docs/<script>-eli11.md` walkthrough into comments in the script it
+   describes, in the same plain language (short sentences, one idea at a
+   time), then delete `docs/`. Update the root `CLAUDE.md` convention ("Every
+   script gets a plain-language `docs/<script>-eli11.md`") in the same change.
+   `utils.sh` steps 1a/4b and `check-setup.sh` 1a (cpupower/easyeffects/
+   alacritty, 2026-10-28) were deliberately left out of `docs/` pending this.
+
 ## Done
 
 - [x] Add `atmel-firmware` uninstall (with hardware detection to not delete necessary drivers by accident) to `utils.sh`
