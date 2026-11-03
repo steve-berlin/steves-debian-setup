@@ -68,15 +68,13 @@
 
 ## Open
 
-Code-side issues surfaced by the 2026-11-03 comment pass (each is noted in a
-comment at the spot; none fixed yet):
-- [] `utils.sh` step 15 (EasyEffects presets) runs *after* "[✓] done" with no `|| true` — a failure exits non-zero after printing done.
-- [] `utils.sh` step 11 `sed -i.bak` on `~/.tmux.conf` would turn the steves-cli-setup symlink into a plain file (only if the C-a line is missing).
-- [] `check-setup.sh` 1c checks only sysfs; `utils.sh` also checks `lsmod`/`lsusb`, so the two can disagree on `atmel-firmware`.
-- [] `debloat-nvidia.sh --uninstall` still refuses on a box with an NVIDIA GPU (preflight runs for every mode).
-- [] `setup_nordvpn.sh --uninstall` needs `curl` (preflight runs for every mode).
-- [] `profile-tmux-startup.sh` strips only `run-shell` lines, not the short `run` form, so plugin load can be billed as config parse.
-- [] `nic-boost` lacks the re-exec guard, `--dry-run`, and a preflight for `iw`/`ethtool`.
+Code-side issues surfaced by the 2026-11-03 comment pass — all fixed the same
+day: `utils.sh` step 15 now only warns on failure; step 11 refuses to `sed -i`
+a symlinked `~/.tmux.conf`; `check-setup.sh` 1c uses a copy of `utils.sh`'s
+`atmel_present`; `debloat-nvidia.sh --uninstall` and `setup_nordvpn.sh
+--uninstall` no longer hit install-only preflights; the profiler strips `run`
+as well as `run-shell`; `nic-boost` got the re-exec guard, `--dry-run`, a
+preflight, and a `PATH` fix (WiFi half had never run — `iw` is in `/usr/sbin`).
 
 Verified on 2026-08-23: the tmux and `/bin/sh` items below all landed on the deployed T480.
 

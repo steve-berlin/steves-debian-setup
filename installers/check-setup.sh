@@ -96,10 +96,18 @@ for p in easyeffects lsp-plugins-lv2 mda-lv2 zam-plugins; do cp_ "$p"; done
 #     supposed to STAY, so the check flips: present is [OK], missing is
 #     [FAIL]. On a normal laptop there is no such device, so it just checks
 #     the package is gone.
-#     Only that one sysfs test is used here. utils.sh also checks lsmod and
-#     lsusb, so a device found only by those would make utils.sh keep the
-#     package while this reports [FAIL] "still installed".
-if [ -d /sys/bus/usb/drivers/at76c50x_usb ] && ls /sys/bus/usb/drivers/at76c50x_usb 2>/dev/null | grep -qE '^[0-9]'; then
+#     atmel_present is a copy of the same function in utils.sh step 1c, with
+#     the same three tests (a device bound in sysfs, the module in lsmod, a
+#     matching lsusb line), so both scripts always agree on "device present".
+#     Change one, change the other.
+atmel_present() {
+  local d=/sys/bus/usb/drivers/at76c50x_usb
+  [ -d "$d" ] && ls "$d" 2>/dev/null | grep -qE '^[0-9]' && return 0
+  lsmod 2>/dev/null | grep -qi at76c50x_usb && return 0
+  have lsusb && lsusb 2>/dev/null | grep -qiE 'at76|atmel.*(wireless|802\.11)' && return 0
+  return 1
+}
+if atmel_present; then
   pkg atmel-firmware && ok "atmel-firmware kept (at76 device present)" \
     || bad "atmel-firmware missing but an at76 device is present"
 else

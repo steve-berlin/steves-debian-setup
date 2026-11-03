@@ -33,7 +33,8 @@ fi
 #
 # Exit codes:
 #   0  purged, nothing to purge, reverted, or dry-run finished
-#   1  an NVIDIA GPU is present, or a required tool is missing
+#   1  an NVIDIA GPU is present (install mode only), or a required tool
+#      is missing
 #   2  unknown argument
 #   A failing apt/sudo command also stops the script (set -e below), with
 #   that command's own exit code.
@@ -84,10 +85,12 @@ done
 #   ::0300  the main display adapter (VGA)
 #   ::0302  secondary 3D controllers
 #   ::0380  other display controllers
-# If any of them says NVIDIA, stop with exit 1. This runs for --uninstall
-# too. There is deliberately NO flag to override this. If you truly want
-# that, use apt directly and know what you're doing.
-if lspci -nn -d ::0300 -d ::0302 -d ::0380 | grep -qi nvidia; then
+# If any of them says NVIDIA, stop with exit 1. Only the install mode is
+# guarded: --uninstall just deletes the blacklist, which is exactly what you
+# want on a box that turns out to have an NVIDIA card. There is deliberately
+# NO flag to override the install guard. If you truly want that, use apt
+# directly and know what you're doing.
+if [[ $mode == install ]] && lspci -nn -d ::0300 -d ::0302 -d ::0380 | grep -qi nvidia; then
   echo "error: NVIDIA GPU detected by lspci — refusing to purge drivers." >&2
   echo "       This script is for Intel-iGPU-only boxes." >&2
   exit 1

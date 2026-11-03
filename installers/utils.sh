@@ -553,15 +553,20 @@ getent group nordvpn >/dev/null 2>&1 && run $S usermod -aG nordvpn "$USER" || tr
 #     as ~/.tmux.conf.bak), then append three lines: unbind C-b,
 #     set -g prefix C-a, bind C-a send-prefix (press Ctrl-a twice to send a
 #     real Ctrl-a to the program inside).
-#     Careful: ~/.tmux.conf is a symlink into steves-cli-setup on this box.
-#     `sed -i` writes a new file, so it would replace the symlink with a
-#     plain file. That config already sets C-a, so the step is skipped there.
+#     If T is a symlink (on this box it points into steves-cli-setup), the
+#     file belongs to another repo. `sed -i` writes a brand-new file, which
+#     would replace the symlink with a plain copy. So for a symlink it only
+#     warns and leaves the file alone; set the prefix in that repo instead.
 T="$HOME/.tmux.conf"
 if ! grep -qE '^\s*set\s+-g\s+prefix\s+C-a' "$T" 2>/dev/null; then
-  if ((dry)); then
+  if [ -L "$T" ]; then
+    echo "[!] $T is a symlink ($(readlink "$T")) — not rewriting; set prefix C-a there" >&2
+  elif ((dry)); then
     echo "DRY  rewrite $T to set tmux prefix = C-a"
   else
-    [ -f "$T" ] && sed -i.bak -E '/^\s*(set\s+-g\s+prefix|unbind\s+C-b|bind\s+C-a\s+send-prefix)\b/d' "$T"
+    if [ -f "$T" ]; then
+      sed -i.bak -E '/^\s*(set\s+-g\s+prefix|unbind\s+C-b|bind\s+C-a\s+send-prefix)\b/d' "$T"
+    fi
     printf '\nunbind C-b\nset -g prefix C-a\nbind C-a send-prefix\n' >>"$T"
   fi
 fi
@@ -669,8 +674,10 @@ echo "[i] next: bash debloat_scripts/debloat-mx.sh && bash debloat_scripts/deblo
 
 # 15. EasyEffects presets: ready-made equalizer profiles from
 #     JackHack96/EasyEffects-Presets, via its installer. Runs every time (no
-#     "already there?" check). It runs after the "done" message above, and
-#     has no `|| true`: if it fails, the script exits non-zero even though
-#     "done" was already printed.
+#     "already there?" check). It runs after the "done" message above, so a
+#     failure here (no network, the upstream script changed) must not turn
+#     the whole run into a failure: it only prints a warning, and the script
+#     still exits 0. check-setup.sh step 16 tells you if presets are missing.
 shr "bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/JackHack96/EasyEffects-Presets/master/install.sh)\"" \
-  "install EasyEffects presets via curl | bash"
+  "install EasyEffects presets via curl | bash" \
+  || echo "[!] EasyEffects presets install failed — re-run step 15 by hand" >&2

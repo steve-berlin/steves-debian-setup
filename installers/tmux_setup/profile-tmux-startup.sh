@@ -153,9 +153,11 @@ measure_tmux() {
   fi
 
   # Plugins stripped: isolates config parsing from `run-shell` plugin loading.
-  # Only lines starting with `run-shell` are dropped; the short alias `run`
-  # (e.g. `run '~/.tmux/plugins/tpm/tpm'`) is kept and counts as parsing.
-  grep -v '^[[:space:]]*run-shell' "$CONF" > "$TMPD/noplug.conf"
+  # Drops lines starting with `run-shell` and with its short alias `run`
+  # (e.g. `run '~/.tmux/plugins/tpm/tpm'`, the form install-tmux-immortal.sh
+  # writes), each with or without -b. The word must end right after `run` or
+  # `run-shell`, so a line like `running...` is not touched.
+  grep -vE '^[[:space:]]*run(-shell)?([[:space:]]|$)' "$CONF" > "$TMPD/noplug.conf"
   T_NOPLUG=$(best_tmux_ms "$TMPD/noplug.conf")
   row "$T_NOPLUG" "+ config parsed, run-shell lines stripped"
 

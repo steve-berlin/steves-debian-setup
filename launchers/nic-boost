@@ -21,6 +21,7 @@
 #   nic-boost                  on; stays on until reboot
 #   nic-boost <command...>     on, run the command, off again when it exits
 #   nic-boost --off            off (back to driver defaults)
+#   nic-boost --dry-run [...]  print the sudo commands, change nothing
 # The middle form is the good one, e.g.
 #   nic-boost yt-dlp https://example.com/big-video
 #
@@ -37,25 +38,58 @@
 #
 # Exit code: with a command, whatever the command returned (so
 # `nic-boost make test` fails when the tests fail). Without one, 0.
+# 1: a needed tool (sudo, iw, ethtool) is missing. 2: a bad argument.
+
+# Re-exec guard. This script uses bash-only syntax. Run as `sh nic-boost`,
+# dash would read it and trip. BASH_VERSION is only set inside bash, so when
+# it is empty we restart the same script, with the same arguments, under bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 
 # set -e: stop at the first command that fails.
 # set -u: treat a typo'd (unset) variable name as an error.
 # set -o pipefail: a pipe fails if any command in it fails, not just the last.
 set -euo pipefail
 
-# mode=on (default) applies the boost. A first argument of --off sets
-# mode=off and drops that argument. Anything after --off is ignored.
-mode=on
-if [[ ${1:-} == --off ]]; then mode=off; shift; fi
-if [[ ${1:-} == -h || ${1:-} == --help ]]; then
-  cat <<EOF
+# iw and ethtool live in /usr/sbin, which a normal user's PATH often lacks.
+# Without this line `command -v iw` fails and the WiFi part used to be
+# skipped without a word, even though iw was installed.
+PATH=$PATH:/usr/sbin:/sbin
+
+# Options come first, then the optional command:
+#   --off      mode=off: revert instead of boosting. Takes no command.
+#   --dry-run  dry=1: print each sudo command instead of running it.
+#   --         end of options; everything after is the command, even if it
+#              starts with a dash.
+# The first word that is not an option starts the command, so
+# `nic-boost curl --off` runs curl with its own --off flag.
+mode=on dry=0
+while (( $# > 0 )); do
+  case $1 in
+    --off)     mode=off; shift ;;
+    --dry-run) dry=1; shift ;;
+    -h|--help)
+      cat <<EOF
 Usage:
   nic-boost                 apply boost; revert on reboot
   nic-boost <command...>    apply boost, run command, revert on its exit
   nic-boost --off           revert manually (back to defaults)
+  --dry-run                 print what would run, change nothing
 EOF
-  exit 0
+      exit 0 ;;
+    --) shift; break ;;
+    -*) echo "error: unknown option: $1" >&2; exit 2 ;;
+    *)  break ;;
+  esac
+done
+if [[ $mode == off ]] && (( $# > 0 )); then
+  echo "error: --off takes no command (got: $*)" >&2
+  exit 2
 fi
+
+# run: in dry-run, print "DRY  <command>"; otherwise run the command.
+run() { if (( dry )); then printf 'DRY  %s\n' "$*"; else "$@"; fi; }
 
 # Find the network cards. The kernel lists every interface as a folder in
 # /sys/class/net/. Skip the ones that aren't real hardware: loopback (lo),
@@ -63,8 +97,9 @@ fi
 # Then sort the rest:
 #   wifi: has a "wireless" subfolder.
 #   eth:  anything else with a hardware driver (device/driver exists).
-#         VPN tunnels (e.g. nordlynx) have no driver link, so they are
-#         left out on their own.
+#         VPN tunnels (nordlynx, tailscale0), the LXC bridge (lxcbr0) and
+#         the modem (wwan0) have no driver link, so they are left out on
+#         their own.
 # Nothing to configure: works with both, one, or oddly named cards.
 eth=() wifi=()
 for i in /sys/class/net/*; do
@@ -74,20 +109,30 @@ for i in /sys/class/net/*; do
   elif [[ -e $i/device/driver ]]; then eth+=("$n"); fi
 done
 
+# Preflight: stop loudly instead of quietly doing nothing. sudo is always
+# needed (except in a dry run). iw is needed only if a WiFi card was found,
+# ethtool only if an ethernet card was found. Both come from the Debian
+# packages of the same name.
+need=()
+if (( ! dry )); then need+=(sudo); fi
+if (( ${#wifi[@]} )); then need+=(iw); fi
+if (( ${#eth[@]} )); then need+=(ethtool); fi
+for c in "${need[@]}"; do
+  command -v "$c" >/dev/null || { echo "missing: $c (sudo apt install $c)" >&2; exit 1; }
+done
+
 # set_nic on|off: set WiFi power_save and ethernet EEE to the same value.
 # The words read backwards: `off` boosts (kills idle napping), `on` = default.
 # You are turning power SAVING off, not the network.
-# Every change is allowed to fail quietly (`2>/dev/null || true`). Many
-# ethernet chips have no EEE at all; that is not an error. If iw is not
-# installed, the WiFi part is skipped. If ethtool is missing, the ethernet
-# part fails just as quietly.
+# Each change may still fail quietly (`2>/dev/null || true`). Many ethernet
+# chips have no EEE at all; that is not an error.
 set_nic() {
   local st=$1 n
   for n in "${wifi[@]}"; do
-    command -v iw >/dev/null && sudo iw dev "$n" set power_save "$st" 2>/dev/null || true
+    run sudo iw dev "$n" set power_save "$st" 2>/dev/null || true
   done
   for n in "${eth[@]}"; do
-    sudo ethtool --set-eee "$n" eee "$st" 2>/dev/null || true
+    run sudo ethtool --set-eee "$n" eee "$st" 2>/dev/null || true
   done
 }
 

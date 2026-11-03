@@ -48,7 +48,7 @@ Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partiti
 
 ### `nic-boost` — temporary WiFi/EEE perf boost
 
-Runtime-only NIC tweaks for bandwidth-heavy work. They cost battery *exactly when traffic is low* (they remove idle-time hardware napping), so they're opt-in per session: `sudo iw dev <wifi> set power_save off` (~0.3–0.5 W extra at idle); `sudo ethtool --set-eee <eth> eee off` (~0.5 W extra on an idle link). Three shapes: bare (apply, persist); `nic-boost <cmd>` (apply, run, revert on exit via `trap revert EXIT INT TERM` — covers Ctrl-C/kill); `--off` (revert). No modprobe/dispatcher files written — a reboot reverts to driver defaults.
+Runtime-only NIC tweaks for bandwidth-heavy work. They cost battery *exactly when traffic is low* (they remove idle-time hardware napping), so they're opt-in per session: `sudo iw dev <wifi> set power_save off` (~0.3–0.5 W extra at idle); `sudo ethtool --set-eee <eth> eee off` (~0.5 W extra on an idle link). Three shapes: bare (apply, persist); `nic-boost <cmd>` (apply, run, revert on exit via `trap 'set_nic on' EXIT INT TERM` — covers Ctrl-C/kill); `--off` (revert, takes no command). Plus `--dry-run` and `--` (end of options). Appends `/usr/sbin:/sbin` to `PATH` — `iw` lives there, and before 2026-11-03 `command -v iw` failed for a normal user so the WiFi half silently never ran. Preflight hard-fails on missing `sudo`/`iw`/`ethtool` (each only if needed). No modprobe/dispatcher files written — a reboot reverts to driver defaults.
 
 ## autostarts/
 

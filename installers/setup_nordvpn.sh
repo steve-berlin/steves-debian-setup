@@ -36,7 +36,7 @@ fi
 #
 # Exit codes:
 #   0  installed, already installed, uninstalled, or dry-run finished
-#   1  a required tool (curl, sudo) is missing
+#   1  a required tool is missing (sudo; curl too when installing)
 #   2  unknown argument
 set -euo pipefail
 
@@ -58,9 +58,12 @@ done
 run() { (( dry )) && printf 'DRY  %s\n' "$*" || "$@"; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
-# Step 1: check we have curl and sudo. Missing either one, stop now rather
-# than half-working. This check runs for --uninstall too.
-for c in curl sudo; do
+# Step 1: check the tools this mode needs, and stop now rather than
+# half-working. sudo is always needed. curl only fetches the installer, so
+# --uninstall doesn't ask for it.
+need=(sudo)
+if [[ $mode == install ]]; then need+=(curl); fi
+for c in "${need[@]}"; do
   have "$c" || { echo "missing: $c" >&2; exit 1; }
 done
 
