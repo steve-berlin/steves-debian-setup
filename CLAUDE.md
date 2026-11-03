@@ -13,7 +13,6 @@ installers/       utils.sh check-setup.sh install-anki.sh install-ly.sh check-ly
 debloat_scripts/  debloat-{mx,kde,nvidia}.sh                    [nested CLAUDE.md]
 launchers/        nic-boost
 autostarts/       *.desktop for ~/.config/autostart
-docs/             ELI11 walkthroughs, one per script
 nord-job/         nord-rand + nord-rand.cron (6-hourly NordVPN rotation)
 nvim-config/      vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
 backup.zshrc      reference copy of ~/.zshrc (don't source — tokens stripped)
@@ -36,11 +35,11 @@ Not on the install path: `fix-mount.sh` — run it when a mount fails.
 - `#!/usr/bin/env bash` + `[ -z "${BASH_VERSION:-}" ]` re-exec guard — catches `sh installers/foo.sh` before dash trips on bashisms.
 - `set -euo pipefail`. `--dry-run` prints actions, mutates nothing (combinable with mode flags). Idempotent: re-run on an installed box = no-op.
 - Standard modes: bare / `--reinstall` / `--uninstall` / `--dry-run`. Per-script notes call out deviations.
-- **`set -e` + AND-list trap**: a bare `[[ cond ]] && cmd` (or `(( n )) && cmd`) is a *failing* command when the condition is false, and kills the script. Use `if` blocks or append `|| true`. It only looks safe when the enclosing function is itself called inside a `&&`/`||` list, which suppresses `set -e` for the whole body — never rely on that.
+- **`set -e` + AND-list trap**: a bare `[[ cond ]] && cmd` (or `(( n )) && cmd`) with a false condition returns non-zero. Mid-function, `set -e` ignores it; but as the **last command of a function** it becomes the function's return status and kills the script at the call site (same as the last line of the script sets its exit code). Since edits move lines around, don't rely on position: use `if` blocks or append `|| true`. Also never rely on a function being called inside a `&&`/`||` list, which suppresses `set -e` for the whole body.
 - No creds, no scraping behind logins, no `curl | sudo bash` of unaudited third parties.
 - Hard-fail loud on missing deps in a `preflight` block. Sudo called inline, never via script-wide re-exec.
 - **Track multi-step work in real time.** ≥3 discrete steps → TaskCreate/TaskUpdate; `in_progress` BEFORE starting, `completed` immediately when done (don't batch). One task per commit for multi-commit work.
-- Every script gets a plain-language `docs/<script>-eli11.md` walkthrough, kept in sync with the code.
+- Every script carries its own plain-language (ELI11) comments, kept in sync with the code: a short header (problem, terms, usage, exit codes), and the rest *distributed* — the note on a variable sits above its definition, on a step above that step, on a flag where it's parsed. Short sentences, one idea each. Comment-only edits must leave code untouched: `diff <(git show HEAD:$f | grep -vE '^[[:space:]]*(#|$)') <(grep -vE '^[[:space:]]*(#|$)' $f)` prints nothing. Never put comment lines inside heredocs/multi-line strings, and mind scripts whose `--help` prints fixed header lines (`debloat-nvidia.sh` uses `sed -n '6,10p' "$0"`). The old `docs/*-eli11.md` were folded in and deleted; recover with `git show 204e76b:docs/<script>-eli11.md`.
 
 ## Not in this repo
 Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partitions (`/games/{steam,minecraft}`), Roblox/Steam/Minecraft runtime data, Waydroid/Android-x86 VM state — see sister repos. Live tmux config — see `steves-cli-setup`.

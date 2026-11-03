@@ -62,7 +62,7 @@ installers/fix-mount.sh --dry-run /dev/sdb /mnt/usb   # diagnose only
 installers/fix-mount.sh /dev/sdb /mnt/usb             # diagnose + fix, prompts before each change
 ```
 
-Plain-language walkthrough: [`docs/fix-mount-eli11.md`](docs/fix-mount-eli11.md).
+Plain-language walkthrough: the comments inside `installers/fix-mount.sh`.
 
 `install-music-dl.sh` installs `rip` (streamrip — Qobuz/Tidal/Deezer/SoundCloud,
 needs your own subscription), `spotdl` (Spotify playlists, audio sourced from
@@ -74,15 +74,15 @@ YouTube answers those with "Sign in to confirm you're not a bot". `curl-cffi`
 (installed by the script) clears Cloudflare 403s via `--impersonate chrome`, but
 YouTube's gate needs cookies — `yt-dlp --cookies-from-browser firefox`,
 `spotdl --cookie-file`. So spotdl's audio leg is blocked behind the VPN while its
-Spotify metadata leg works fine. Walkthrough:
-[`docs/install-music-dl-eli11.md`](docs/install-music-dl-eli11.md).
+Spotify metadata leg works fine. Walkthrough: the comments inside
+`installers/install-music-dl.sh`.
 
-**Every script has a plain-language walkthrough in [`docs/`](docs/)**, one
-per script, named `<script>-eli11.md`. Start with
-[`docs/utils-eli11.md`](docs/utils-eli11.md) (what each numbered step
-installs, why step 8 overwrites `~/.config/nvim/`, what it refuses to
-touch) and [`docs/check-setup-eli11.md`](docs/check-setup-eli11.md) (how
-to read its output, and why steps 14–15 fail on a box that only ran
+**Every script explains itself in plain-language comments**, placed next to
+the code they describe: a short header (what it solves, how to run it, exit
+codes), then one note above each step, variable and function. Start with
+`installers/utils.sh` (what each numbered step installs, why step 8 overwrites
+`~/.config/nvim/`, what it refuses to touch) and `installers/check-setup.sh`
+(how to read its output, and why steps 14–15 fail on a box that only ran
 `utils.sh`).
 
 Every installer supports `--dry-run` (prints actions, mutates nothing)
@@ -102,7 +102,6 @@ launchers/                  nic-boost
 nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)
-docs/                       plain-language (ELI11) walkthroughs, one per script
 backup.zshrc                reference copy of ~/.zshrc (do not source as-is)
 backup.tmux.conf            stale — live ~/.tmux.conf symlinks into steves-cli-setup
 claude-config/settings.json reference copy of ~/.claude/settings.json (statusline, caveman plugin, effort)

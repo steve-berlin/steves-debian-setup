@@ -5,34 +5,77 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 # fix-mount.sh — diagnose and repair a failing mount.
 #
-# The error this exists for:
+# THE ERROR THIS EXISTS FOR
 #
 #   mount: /dev/sdb: mount point not mounted or bad option.
 #          dmesg(1) may have more information after failed mount system call.
 #
-# That message is util-linux's catch-all for "I could not turn what you typed
-# into a (device, mountpoint, filesystem) triple". In practice it is one of:
+# That message is a catch-all from util-linux (the package that ships mount).
+# mount needs three things to line up:
+#   1. a device      — the real hardware, like the USB stick you plugged in
+#   2. a filesystem  — the way files are organised on that device
+#   3. a mountpoint  — an empty folder to attach it to, like /mnt/usb
+# If any one is missing, you get the same message. This script finds out which.
+# In practice the cause is one of:
 #
-#   1. One-argument `mount /dev/sdb` with no matching /etc/fstab entry — mount
+#   1. One-argument `mount /dev/sdb` with no matching /etc/fstab entry. mount
 #      has nowhere to put it and refuses to guess.
 #   2. /dev/sdb is the whole disk. The filesystem lives on a partition
 #      (/dev/sdb1); the disk itself holds only a partition table.
 #   3. `mount -o remount …` aimed at something that is not currently mounted.
-#   4. The mountpoint directory does not exist, or the fs driver (exfat, ntfs3,
-#      f2fs…) is not loaded/installed, so no candidate mount can succeed.
+#   4. The mountpoint folder does not exist, or the filesystem driver (exfat,
+#      ntfs3, f2fs…) is not loaded or not installed, so no mount can succeed.
 #
-# This script resolves what you typed, names the actual cause, and fixes the
-# safe ones. It never formats, never repartitions, never edits /etc/fstab.
+# WORDS YOU NEED FIRST
+#   Disk        the physical thing. Linux calls it /dev/sdb.
+#   Partition   a slice of the disk: /dev/sdb1, /dev/sdb2, … Files live in the
+#               slices, not in the whole disk. The disk itself only holds a
+#               tiny map of where the slices start and end. Typing /dev/sdb
+#               when the files are on /dev/sdb1 is the most common cause.
+#   Filesystem  the filing system inside a slice. Common ones: ext4 (Linux),
+#               vfat (old USB sticks, camera cards), exfat (big modern USB
+#               sticks), ntfs (Windows drives).
+#   Mountpoint  Linux has no drive letters. You attach a filesystem to an
+#               empty folder, and from then on that folder *is* the drive.
+#               The folder must exist first — mount will not create it.
+#   Driver      the part of Linux that reads one kind of filesystem. With no
+#               driver, the disk is fine and unreadable at the same time.
 #
-# Every mutating action prompts y/N unless --yes is given. --dry-run mutates
-# nothing at all.
+# HOW TO RUN IT
+#   fix-mount.sh /dev/sdb /mnt/usb       disk + where you want it
+#   fix-mount.sh /mnt/usb                if /etc/fstab already knows it
+#   fix-mount.sh LABEL=backup /mnt/bkp   by the name written on the disk
+#
+#   --dry-run       print the plan, change absolutely nothing. Always safe.
+#   -y, --yes       do not ask before each fix (still asks before ntfsfix)
+#   -o OPTS         your own mount options, passed straight to mount -o
+#   -h, --help      usage
+#
+# WHAT IT WILL NEVER DO
+#   format anything or create a filesystem; partition or repartition a disk;
+#   edit /etc/fstab; run fsck; unlock an encrypted disk, activate LVM, or
+#   assemble a RAID array. For those it stops, says what it found, prints the
+#   command you would run, and exits 1. It never guesses past them.
+#
+# EXIT CODES
+#   0   mounted, already mounted, or dry-run finished with nothing blocking
+#   1   could not fix it — the reason is printed above. Also: an unknown
+#       option, too many arguments, or -o with no value.
+#   2   no <target> given (usage is printed)
 set -euo pipefail
 
 # blkid, findfs, modprobe and fsck live in /usr/sbin (and /sbin). A plain user
-# shell on Debian/MX does not have those on PATH, so every probe below would
-# silently come back empty. Prepend them unconditionally — harmless duplicates.
+# shell on Debian/MX does not have those on PATH. Without them every probe
+# below would silently come back empty, and the diagnosis would be wrong, not
+# missing. So put them first on PATH every time. Duplicates are harmless.
 PATH=/usr/sbin:/sbin:$PATH
 
+# Settings filled in by the argument parser below.
+#   dry         1 = --dry-run: print actions, change nothing.
+#   assume_yes  1 = --yes: answer "yes" to every routine prompt.
+#   opts        the -o value, passed through to mount -o. Empty = none given.
+#   target      first positional argument: what you want mounted.
+#   want_mp     second positional argument: where to mount it.
 dry=0 assume_yes=0 opts=""
 target="" want_mp=""
 
@@ -59,11 +102,15 @@ EOF
 }
 
 # --- output helpers ---------------------------------------------------------
+# Colours only when stdout is a terminal. Piped into a file or less, the
+# escape codes would show up as junk, so they are set to empty strings.
 if [[ -t 1 ]]; then
   c_r=$'\e[31m' c_g=$'\e[32m' c_y=$'\e[33m' c_b=$'\e[1m' c_0=$'\e[0m'
 else
   c_r="" c_g="" c_y="" c_b="" c_0=""
 fi
+# ok/bad/info print a tagged line. warn goes to stderr. head_ prints a bold
+# section title. die prints a [FAIL] line and exits 1.
 ok()   { printf '%s[ OK ]%s %s\n'   "$c_g" "$c_0" "$*"; }
 bad()  { printf '%s[FAIL]%s %s\n'   "$c_r" "$c_0" "$*"; }
 warn() { printf '%s[WARN]%s %s\n'   "$c_y" "$c_0" "$*" >&2; }
@@ -72,6 +119,9 @@ head_() { printf '\n%s== %s ==%s\n' "$c_b" "$*" "$c_0"; }
 die()  { bad "$*"; exit 1; }
 
 # --- argument parsing -------------------------------------------------------
+# Flags can come in any order. Anything not starting with "-" is a positional:
+# the first one is <target>, the second is [mountpoint], a third is an error.
+# "--" ends the flags. Note: die exits 1, so a bad flag exits 1, not 2.
 while (( $# )); do
   case $1 in
     -o|--options) [[ ${2:-} ]] || die "--options needs a value"; opts=$2; shift 2 ;;
@@ -88,11 +138,15 @@ while (( $# )); do
       shift ;;
   esac
 done
+# No target at all: print usage and exit 2 (the only exit-2 path).
 [[ $target ]] || { usage >&2; exit 2; }
 
 # --- preflight --------------------------------------------------------------
-# Under --dry-run a missing dep is a warning, not a hard fail (see install-ly.sh):
-# you may well be dry-running on a box that has not installed the tool yet.
+# Check the tools the script cannot work without. lsblk, findmnt, mount and
+# blkid all come from util-linux; sudo runs every change.
+# Under --dry-run a missing tool is a warning, not a hard fail (see
+# install-ly.sh): you may well be dry-running on a box that has not installed
+# the tool yet.
 preflight() {
   local miss; miss() { (( dry )) && warn "$1" || die "$1"; }
   local t
@@ -103,8 +157,13 @@ preflight() {
 }
 
 # --- target resolution ------------------------------------------------------
-# Fills DEV (canonical block device, or empty) and MP (mountpoint path, which
-# may not exist yet, or empty). Neither being set is a hard failure.
+# Step 1: work out what you meant. You can hand in a device (/dev/sdb), a
+# folder (/mnt/usb), or a label or UUID (the disk's name, or its long unique
+# serial number). resolve() turns any of those into a real device.
+#
+# DEV  the real block device node, like /dev/sdb1. Empty if not known yet.
+# MP   the mountpoint path. It may not exist yet. Empty if not known yet.
+# Neither being set later is a hard failure.
 DEV="" MP=""
 
 resolve() {
@@ -112,24 +171,27 @@ resolve() {
 
   case $t in
     UUID=*|PARTUUID=*|LABEL=*|PARTLABEL=*)
-      # findfs is the canonical resolver and understands every tag form.
+      # A tag like LABEL=backup. findfs is the standard tool that turns a tag
+      # into a device, and it understands every tag form.
       DEV=$(findfs "$t" 2>/dev/null || true)
       [[ $DEV ]] || die "no block device matches $t  (lsblk -o NAME,LABEL,UUID to list)"
       ;;
     /dev/*)
+      # A device path. It must exist and be a block device (a disk-like node).
       [[ -e $t ]] || die "no such device: $t  (lsblk to list what is attached)"
       [[ -b $t ]] || die "not a block device: $t"
-      # /dev/disk/by-*/… are symlinks; carry the real node so later lsblk and
-      # findmnt lookups match what the kernel reports.
+      # /dev/disk/by-*/… are symlinks. Follow them to the real node, so later
+      # lsblk and findmnt lookups match the name the kernel reports.
       DEV=$(readlink -f "$t")
       ;;
     /*)
-      # An absolute path that is not under /dev is a mountpoint — existing or
-      # intended. A missing directory is itself one of the causes we fix.
+      # An absolute path that is not under /dev is a mountpoint, existing or
+      # intended. A missing folder is itself one of the causes we fix.
       MP=$t
       ;;
     *)
-      # Bare word: try device node, then filesystem label, then uuid.
+      # A bare word, like "sdb1" or "backup". Try, in order: a device node
+      # /dev/<word>, then a filesystem label, then a UUID.
       if   [[ -b /dev/$t ]];            then DEV=$(readlink -f "/dev/$t")
       elif DEV=$(findfs "LABEL=$t" 2>/dev/null); then :
       elif DEV=$(findfs "UUID=$t"  2>/dev/null); then :
@@ -144,9 +206,11 @@ resolve() {
 }
 
 # --- already mounted? -------------------------------------------------------
-# Cheapest possible exit: if the thing is already mounted there is nothing to
-# repair, and `mount` would have said "already mounted" rather than the error
-# this script is named for.
+# Step 2: is it already mounted? If yes, say where and stop: nothing to fix.
+# This is the cheapest exit. (If it were mounted, mount would have said
+# "already mounted", not the error this script is named for.)
+# Checks the device first, then whether anything at all sits on the
+# mountpoint. Returns 0 = already mounted, 1 = not mounted.
 check_mounted() {
   local where=""
   if [[ $DEV ]]; then
@@ -166,24 +230,44 @@ check_mounted() {
 }
 
 # --- diagnosis --------------------------------------------------------------
-# Findings accumulate as parallel arrays: CAUSES[i] is what is wrong, FIXES[i]
-# is the command (or human action) that clears it. Step 3 acts on the flags
-# TRY_DEV / TRY_FS / NEED_MKDIR / NEED_MODULE / NEED_PKG rather than re-parsing
-# these strings.
+# Step 3: diagnose. This part only *reads*; it changes nothing. It checks:
+#   - did you point at the whole disk instead of a partition?
+#   - what filesystem is on there, if any?
+#   - is its driver loaded, merely available, or missing?
+#   - does the mountpoint exist, is it a folder, is it empty?
+#   - is the device already in use somewhere else?
+#   - is /etc/fstab (the list of drives Linux mounts by itself) involved?
+# Then it prints a numbered list: each cause and the command that fixes it.
+#
+# Findings pile up in two matching lists. CAUSES[i] says what is wrong.
+# FIXES[i] is the command (or human action) that clears it. The fix step acts
+# on the flags below, not on these strings:
+#   TRY_DEV      the device we will actually try to mount (may differ from DEV)
+#   TRY_FS       the filesystem type found on TRY_DEV
+#   NEED_MKDIR   1 = the mountpoint folder must be created
+#   NEED_MODULE  name of a kernel module to load with modprobe
+#   NEED_PKG     name of a Debian package to install for the driver
+#   BLOCKED      1 = found something this script must not fix (see block())
 CAUSES=() FIXES=()
 TRY_DEV="" TRY_FS="" NEED_MKDIR=0 NEED_MODULE="" NEED_PKG="" BLOCKED=0
+# add: record a cause the script can fix.
 add() { CAUSES+=("$1"); FIXES+=("$2"); }
-# BLOCKED marks a cause this script must not fix on its own (encrypted volume,
-# LVM member, no filesystem at all). Step 3 refuses to guess past one.
+# block: record a cause this script must not fix on its own (encrypted volume,
+# LVM member, no filesystem at all…) and set BLOCKED. The script then prints
+# the command you would run and exits 1. It refuses to guess past one.
 block() { CAUSES+=("$1"); FIXES+=("$2"); BLOCKED=1; }
 
-# lsblk reads the udev database, so it answers as an unprivileged user; blkid
-# would need root to re-read the superblock. Prefer lsblk everywhere.
+# lsb <column> <device>: ask lsblk for one column of one device, like FSTYPE.
+# lsblk reads the udev database (the list the system keeps of every device),
+# so it answers for a normal user. blkid would need root to re-read the disk
+# itself. So lsblk is used everywhere.
 lsb() { lsblk -dnro "$1" "$2" 2>/dev/null || true; }
 
-# Filesystem driver state: 0 = loaded, 1 = module present but not loaded,
-# 2 = no driver on this system. Callers must use it in an `if`/`case` —
-# a bare call would trip `set -e`.
+# Is there a driver for filesystem <fs>? The answer is the return code:
+#   0 = loaded (listed in /proc/filesystems)
+#   1 = module is on disk but not loaded (modinfo finds it)
+#   2 = no driver on this system at all
+# Callers must use it in an `if`/`case` — a bare call would trip `set -e`.
 fs_driver() {
   local fs=$1
   if grep -qw "$fs" /proc/filesystems; then return 0; fi
@@ -191,7 +275,8 @@ fs_driver() {
   return 2
 }
 
-# Userspace tools / FUSE drivers Debian ships separately from the kernel module.
+# Which Debian package supplies the tools / FUSE driver for a filesystem type.
+# Debian ships these apart from the kernel module. Empty = no known package.
 fs_pkg() {
   case $1 in
     ntfs|ntfs3) echo ntfs-3g ;;
@@ -207,7 +292,9 @@ fs_pkg() {
 }
 
 # /etc/fstab is the reason a one-argument `mount` ever works. If the target has
-# an entry, mount already knows the pair and the failure is elsewhere.
+# an entry, mount already knows the (device, mountpoint) pair and the failure
+# is elsewhere. Looks both ways: mountpoint -> device, then device ->
+# mountpoint, and fills in whichever of DEV / MP is still empty.
 fstab_lookup() {
   local src="" mp=""
   if [[ $MP ]]; then
@@ -231,6 +318,7 @@ fstab_lookup() {
 
 # Cause 2: the argument is the whole disk. A disk holds a partition table, not
 # a filesystem, so mount has nothing to work with. Pick the partition instead.
+# Returns 1 (do nothing) when DEV is not a whole disk or loop device.
 expand_disk() {
   local type; type=$(lsb TYPE "$DEV")
   [[ $type == disk || $type == loop ]] || return 1
@@ -238,6 +326,8 @@ expand_disk() {
   # A disk can legitimately carry a filesystem directly (superfloppy layout).
   if [[ $self_fs ]]; then return 1; fi
 
+  # List every partition under the disk that has a filesystem, as
+  # "name|fstype|size" strings.
   local -a cand=() name fstype size
   while read -r name fstype size; do
     if [[ $name == "$DEV" ]]; then continue; fi
@@ -245,12 +335,15 @@ expand_disk() {
     cand+=("$name|$fstype|$size")
   done < <(lsblk -nrpo NAME,FSTYPE,SIZE "$DEV" 2>/dev/null || true)
 
+  # None at all: blank, wiped or unpartitioned. Stop here.
   if (( ${#cand[@]} == 0 )); then
     block "$DEV is a whole disk with no mountable partition on it" \
           "inspect it: lsblk -f $DEV   (an empty or unpartitioned disk needs partitioning/formatting — this script will not do that)"
     return 0
   fi
 
+  # One partition: use it. Several: list them all and tell you to pick one,
+  # but still go on with the first one (the mount step asks before running).
   local first=${cand[0]} rest
   rest=${first#*|}                       # "<fstype>|<size>"
   if (( ${#cand[@]} == 1 )); then
@@ -266,8 +359,11 @@ expand_disk() {
   fi
 }
 
-# Container formats are not filesystems. Mounting them directly always fails,
-# and the unlock step is stateful enough that guessing is wrong.
+# Container formats are not filesystems: an encrypted LUKS volume, an LVM
+# physical volume, an md RAID member. Mounting them directly always fails, and
+# opening them changes system state, so guessing is wrong. Each one blocks and
+# prints the command you would run. Swap is listed too: it is switched on with
+# swapon, never mounted.
 check_container() {
   case $TRY_FS in
     crypto_LUKS)
@@ -285,8 +381,13 @@ check_container() {
   esac
 }
 
+# What filesystem is on TRY_DEV, and can this system read it?
 check_fs() {
   TRY_FS=$(lsb FSTYPE "$TRY_DEV")
+  # No filesystem signature: the disk is brand new, wiped, or truly broken.
+  # No mount option rescues that. Check the hardware first (lsblk,
+  # sudo dmesg | tail). Formatting destroys everything on the disk: if the
+  # data matters, stop and copy the raw disk somewhere else first.
   if [[ -z $TRY_FS ]]; then
     block "no filesystem signature found on $TRY_DEV" \
           "confirm with: sudo blkid $TRY_DEV   (blank means unformatted — formatting is destructive and out of scope here)"
@@ -296,6 +397,8 @@ check_fs() {
   check_container
   if (( BLOCKED )); then return 0; fi
 
+  # Driver state (see fs_driver): loaded = fine; on disk = modprobe it;
+  # absent = install the package from fs_pkg, or block if none is known.
   local pkg; pkg=$(fs_pkg "$TRY_FS")
   local rc=0; fs_driver "$TRY_FS" || rc=$?
   case $rc in
@@ -315,12 +418,16 @@ check_fs() {
 
   # vfat/exfat/ntfs carry no Unix ownership. Without uid=/gid= the mount lands
   # root-owned and read-only for you, which reads as a second, later failure.
+  # This is only a hint; mount_opts() below adds uid=/gid= by itself.
   case $TRY_FS in
     vfat|exfat|ntfs|ntfs3)
       [[ $opts == *uid=* ]] || info "hint: $TRY_FS has no Unix permissions — add -o uid=$(id -u),gid=$(id -g) to own the files" ;;
   esac
 }
 
+# Is the mountpoint usable? No mountpoint known: block (we will not guess one).
+# Missing: create it (fixable). Exists but is a file: block. Not empty: only a
+# warning.
 check_mountpoint() {
   if [[ -z $MP ]]; then
     block "no mountpoint given and no /etc/fstab entry for ${TRY_DEV:-$DEV}" \
@@ -338,6 +445,9 @@ check_mountpoint() {
   fi
 }
 
+# Is TRY_DEV already mounted somewhere else? That blocks: unmount it first.
+# (This matters when TRY_DEV is a partition found by expand_disk, which
+# check_mounted did not look at.)
 check_busy() {
   [[ $TRY_DEV ]] || return 0
   local where; where=$(findmnt -n -o TARGET --source "$TRY_DEV" 2>/dev/null | head -1 || true)
@@ -346,6 +456,8 @@ check_busy() {
         "use it there, or: sudo umount $where"
 }
 
+# Run the checks in order. fstab first, since it may fill in DEV or MP. Each
+# later check is skipped once something has blocked.
 diagnose() {
   head_ "diagnosis"
   fstab_lookup || true
@@ -360,6 +472,7 @@ diagnose() {
   (( BLOCKED )) || check_mountpoint
 }
 
+# Print the numbered list: each cause, then "fix:" and its command.
 report() {
   if (( ${#CAUSES[@]} == 0 )); then
     ok "no fault found — the mount should succeed as-is"
@@ -373,9 +486,18 @@ report() {
 }
 
 # --- fixes ------------------------------------------------------------------
-# Everything below can change the system. Each action is gated by confirm():
-# --dry-run prints and returns, --yes answers yes, a non-interactive stdin
-# refuses rather than blocking on a read that will never be answered.
+# Step 4: fix. Everything below can change the system, so it asks before
+# every single change, like:
+#     create mountpoint /mnt/usb? [y/N]
+#     run: sudo mount -o uid=1000,gid=1000 /dev/sdb1 /mnt/usb [y/N]
+# It can: create the mountpoint folder, load a driver (modprobe), install a
+# driver package (apt-get install), and run the corrected mount command.
+#
+# confirm "<question>": ask y/N. Returns 0 only on an answer starting y/Y.
+#   --yes          answers yes without asking.
+#   no terminal    on stdin (piped, cron): refuses, rather than waiting
+#                  forever on a question nobody can answer.
+# --dry-run never reaches here: act() and try_mount() print and return first.
 confirm() {
   if (( assume_yes )); then return 0; fi
   if [[ ! -t 0 ]]; then
@@ -387,7 +509,9 @@ confirm() {
   [[ $a == [yY]* ]]
 }
 
-# Run a privileged command after confirmation. Returns non-zero if declined.
+# act "<question>" <command…>: run a privileged command after confirmation.
+# Under --dry-run it only prints "DRY  <command>". Returns non-zero if
+# declined.
 act() {
   local desc=$1; shift
   if (( dry )); then printf 'DRY  %s\n' "$*"; return 0; fi
@@ -395,6 +519,9 @@ act() {
   "$@"
 }
 
+# Apply the fixable causes, in this order: create the mountpoint, install the
+# driver package, load the kernel module. A declined or failed fix only warns;
+# the mount is still tried after.
 apply_fixes() {
   head_ "applying"
   if (( NEED_MKDIR )); then
@@ -414,8 +541,12 @@ apply_fixes() {
   fi
 }
 
-# vfat/exfat/ntfs store no Unix ownership, so a default mount is root-owned and
-# unwritable for you. Supply uid/gid unless the caller passed their own -o.
+# Why uid=/gid= get added by themselves: vfat, exfat and ntfs come from the
+# Windows world and store no idea of who owns a file. Mounted plainly,
+# everything belongs to root and you cannot write to your own USB stick.
+# So this adds uid=<your id>,gid=<your group> and the files belong to you.
+# If you passed your own -o, it assumes you know what you want and adds
+# nothing.
 mount_opts() {
   if [[ $opts ]]; then printf '%s' "$opts"; return; fi
   case $TRY_FS in
@@ -435,9 +566,15 @@ show_dmesg() {
   fi
 }
 
-# NTFS left dirty by a Windows fast-shutdown or hibernation cannot be mounted
-# read-write. ntfsfix WRITES to the filesystem, so it always asks, even under
-# --yes — that flag means "skip the routine prompts", not "repair my disk".
+# NTFS left "dirty" by Windows cannot be mounted read-write. Windows leaves it
+# dirty after hibernation, and after "fast startup" shutdown (which is really
+# hibernation in disguise, and leaves the disk locked).
+# Why ntfsfix always asks: every other fix creates a folder or installs
+# software — nothing touches your data. ntfsfix WRITES to the filesystem to
+# clear the dirty flag. So it asks every time, even under --yes (that flag
+# means "skip the routine prompts", not "repair my disk"), and refuses
+# entirely when no one is at a terminal to answer. The safer routes: mount
+# read-only, or boot Windows and shut it down fully.
 offer_ntfsfix() {
   command -v ntfsfix >/dev/null || { warn "ntfsfix not installed (apt-get install ntfs-3g)"; return 1; }
   printf '%s\n' "  ntfsfix clears the NTFS dirty flag and journal. It writes to the filesystem."
@@ -448,17 +585,23 @@ offer_ntfsfix() {
   sudo ntfsfix "$TRY_DEV"
 }
 
+# Success: say so and show what is now mounted on MP.
 mounted_ok() {
   ok "mounted"
   findmnt -n -o SOURCE,TARGET,FSTYPE,OPTIONS --mountpoint "$MP"
 }
 
-# Try the mount, and translate whatever mount says back into a next action.
+# Step 5: try the mount. If it still fails, read mount's error and react:
+# show the matching kernel log lines, offer a read-only retry, or — for a
+# Windows disk that was hibernated instead of shut down — offer ntfsfix.
+# try_mount [extra]: "extra" is one more mount option, like "ro", tacked onto
+# the options from mount_opts. Returns 0 = mounted (or dry-run), 1 = not.
 try_mount() {
   local extra=${1:-} mopts
   mopts=$(mount_opts)
   if [[ $extra ]]; then mopts=${mopts:+$mopts,}$extra; fi
 
+  # Build the command as a list, so options and paths with spaces stay whole.
   local -a cmd=(sudo mount)
   if [[ $mopts ]]; then cmd+=(-o "$mopts"); fi
   cmd+=("$TRY_DEV" "$MP")
@@ -466,10 +609,13 @@ try_mount() {
   if (( dry )); then printf 'DRY  %s\n' "${cmd[*]}"; return 0; fi
   if ! confirm "run: ${cmd[*]}"; then info "not mounted (declined)"; return 1; fi
 
+  # Capture mount's error text (stderr) and its exit code without letting
+  # set -e kill the script on failure.
   local err rc=0
   err=$("${cmd[@]}" 2>&1) || rc=$?
   if (( rc == 0 )); then mounted_ok; return 0; fi
 
+  # Match the error text to a likely cause and the next thing to try.
   bad "mount failed: ${err:-exit $rc}"
   case $err in
     *"unknown filesystem type"*)
@@ -478,6 +624,8 @@ try_mount() {
       info "the superblock is unreadable: wrong partition, or a damaged/unsupported filesystem"
       show_dmesg ;;
     *[Hh]ibernat*|*hiberfil*|*"unsafe state"*|*"Falling back to read-only"*)
+      # Dirty NTFS: try ntfsfix and then the same mount again; if that is
+      # declined, offer a read-only mount instead.
       warn "the NTFS volume was not shut down cleanly"
       if offer_ntfsfix; then try_mount "$extra"; return $?; fi
       if confirm "mount read-only instead?"; then try_mount ro; return $?; fi ;;
@@ -490,11 +638,16 @@ try_mount() {
   esac
 
   # Read-only is the standard escape hatch for a damaged or foreign filesystem:
-  # it never writes, so it cannot make the damage worse.
+  # it never writes, so it cannot make the damage worse. Offered once only:
+  # a retry that already has an extra option does not offer it again.
   if [[ -z $extra ]] && confirm "retry read-only (-o ro)?"; then try_mount ro; return $?; fi
   return 1
 }
 
+# The whole run, top to bottom: check tools, resolve the target, show what
+# was resolved, stop if already mounted, diagnose, stop (exit 1) if blocked,
+# apply fixes if any, then mount. try_mount's result is main's last command,
+# so a failed mount makes the script exit 1 (via set -e).
 main() {
   preflight
   resolve "$target"
@@ -517,6 +670,7 @@ main() {
 
   diagnose
   report
+  # A blocked cause exits 1 even under --dry-run.
   if (( BLOCKED )); then exit 1; fi
 
   if (( NEED_MKDIR )) || [[ $NEED_MODULE || $NEED_PKG ]]; then apply_fixes; fi

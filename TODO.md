@@ -48,13 +48,14 @@
    copy here. No longer blocked — the `GH_TOKEN` that made it uncommittable was
    removed and revoked on 2026-09-05.
 
-4. **Replace the ELI11 markdown docs with detailed in-script comments.** Move
-   each `docs/<script>-eli11.md` walkthrough into comments in the script it
-   describes, in the same plain language (short sentences, one idea at a
-   time), then delete `docs/`. Update the root `CLAUDE.md` convention ("Every
-   script gets a plain-language `docs/<script>-eli11.md`") in the same change.
-   `utils.sh` steps 1a/4b and `check-setup.sh` 1a (cpupower/easyeffects/
-   alacritty, 2026-10-28) were deliberately left out of `docs/` pending this.
+4. ~~**Replace the ELI11 markdown docs with detailed in-script comments.**~~
+   Done 2026-11-03. All 18 walkthroughs folded into distributed comments in
+   their scripts (header = problem/terms/usage/exit codes; the rest sits above
+   the variable, step or flag it explains), `docs/` deleted, `CLAUDE.md`
+   convention updated. Code verified untouched (comment-stripped diff empty,
+   `bash -n` clean). `utils.sh` 1a/4b and `check-setup.sh` 1a now explained
+   too. Doc-vs-code mismatches found on the way were resolved in favour of the
+   code; the open code-side ones are listed below.
 
 ## Done
 
@@ -66,6 +67,16 @@
 - [x] Add EarTag install and Foliate uninstall to `utils.sh`
 
 ## Open
+
+Code-side issues surfaced by the 2026-11-03 comment pass (each is noted in a
+comment at the spot; none fixed yet):
+- [] `utils.sh` step 15 (EasyEffects presets) runs *after* "[✓] done" with no `|| true` — a failure exits non-zero after printing done.
+- [] `utils.sh` step 11 `sed -i.bak` on `~/.tmux.conf` would turn the steves-cli-setup symlink into a plain file (only if the C-a line is missing).
+- [] `check-setup.sh` 1c checks only sysfs; `utils.sh` also checks `lsmod`/`lsusb`, so the two can disagree on `atmel-firmware`.
+- [] `debloat-nvidia.sh --uninstall` still refuses on a box with an NVIDIA GPU (preflight runs for every mode).
+- [] `setup_nordvpn.sh --uninstall` needs `curl` (preflight runs for every mode).
+- [] `profile-tmux-startup.sh` strips only `run-shell` lines, not the short `run` form, so plugin load can be billed as config parse.
+- [] `nic-boost` lacks the re-exec guard, `--dry-run`, and a preflight for `iw`/`ethtool`.
 
 Verified on 2026-08-23: the tmux and `/bin/sh` items below all landed on the deployed T480.
 

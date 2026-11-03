@@ -1,11 +1,58 @@
 #!/usr/bin/env bash
-# Measure why `tmux` takes so long to reach a usable prompt, and say what to fix.
+# profile-tmux-startup.sh — find out why tmux takes so long to open.
 #
-# Read-only. Never touches the running tmux server: every measurement runs on a
-# throwaway socket (`tmux -L profile_$$`) that is killed on exit.
+# You type `tmux`, and it sits there. This script times each separate thing
+# that has to happen before you get a prompt, prints the numbers, and says
+# which one to go fix. It only measures. It never changes anything.
+#
+# Words you need first:
+#   pane      one rectangle inside tmux, running one shell. A window can be
+#             split into several.
+#   rc file   the script your shell runs every time it starts. For zsh that
+#             is ~/.zshrc, which here also pulls in ~/.zshrc.local.
+#   plugin    an add-on tmux loads at startup with a `run-shell` line in
+#             ~/.tmux.conf. Each one is an ordinary shell script that must
+#             finish before tmux moves on.
+#   resurrect / continuum
+#             the two plugins that save your sessions and put them back after
+#             a reboot. Restoring means re-opening every pane and re-launching
+#             whatever ran in it.
+#   socket    the file tmux uses to talk to its own server. Two socket names
+#             are two separate tmux servers that cannot see each other. That
+#             is the trick that makes this script safe.
+#
+# Why it is safe: every measurement runs on a throwaway socket,
+# `tmux -L profile_<pid>`. Your real sessions live on the default socket and
+# are never attached to and never killed. (One read-only exception: step 5
+# asks the default server for its @resurrect-dir option.) An EXIT INT TERM
+# trap kills the throwaway server and deletes the temp folder, even if you
+# Ctrl-C halfway. Run it with work open.
+#
+# What it will never do: touch your running server, sessions or saved state;
+# edit ~/.tmux.conf, ~/.zshrc, ~/.zshrc.local or any vendored plugin; install
+# or remove anything; write outside a `mktemp -d` folder it deletes on exit.
+# It tells you what to change. You change it.
+#
+# Flags:
+#   (none)   measure everything and print the report
+#   --help   print usage and exit
+# There is deliberately no --dry-run, --reinstall or --uninstall. Installers
+# have those because they change your machine. This doesn't, so there is
+# nothing to undo or preview.
+#
+# Exit codes:
+#   0  measured everything, printed the report
+#   1  missing tmux, awk, or a nanosecond-capable `date`
+#   2  unknown command-line argument
 [ -z "${BASH_VERSION:-}" ] && exec bash "$0" "$@"
 set -euo pipefail
 
+# SOCK: name of the private tmux socket. $$ is this script's process id, so
+# two runs never share one.
+# TMPD: the temp folder (made in main). Empty until then, so cleanup() knows
+# there is nothing to delete yet.
+# cleanup: kill the throwaway server and delete TMPD. The trap runs it on
+# normal exit, Ctrl-C (INT) and kill (TERM).
 SOCK="profile_$$"
 TMPD=""
 cleanup() {
@@ -25,18 +72,24 @@ sessions attached.
 EOF
 }
 
+# Only the first argument is looked at: --help/-h, or nothing. Anything else
+# prints usage and exits 2.
 case "${1:-}" in
   --help|-h) usage; exit 0 ;;
   "") ;;
   *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
 esac
 
+# Step 1: check it can run at all. Needs tmux, awk, and a `date` that prints
+# nanoseconds (`date +%s%N` must give 16+ digits). Any missing is a hard fail
+# with a message, not a confusing crash later.
 preflight() {
   command -v tmux >/dev/null 2>&1 || { echo "fatal: tmux not on PATH" >&2; exit 1; }
   command -v awk  >/dev/null 2>&1 || { echo "fatal: awk not on PATH"  >&2; exit 1; }
   date +%s%N | grep -qE '^[0-9]{16,}$' || { echo "fatal: date +%s%N has no nanoseconds" >&2; exit 1; }
 }
 
+# now_ms: the current time in milliseconds (nanoseconds / 1000000).
 now_ms() { echo $(( $(date +%s%N) / 1000000 )); }
 
 # Run "$@" three times, echo the fastest wall time in ms. Best-of-3 rather than
@@ -54,7 +107,9 @@ best_ms() {
 # Same, for starting a tmux server with a given config. The server MUST be
 # killed between iterations: a second `new-session` against a live server
 # reuses it, skipping the config parse and every run-shell, which silently
-# reports plugin loading as free.
+# reports plugin loading as free. An earlier draft did exactly that and
+# reported plugin loading as 23 ms instead of 1137 ms. If you edit this, keep
+# the kill-server.
 best_tmux_ms() {
   local conf=$1 i s e d best=999999
   for i in 1 2 3; do
@@ -69,12 +124,22 @@ best_tmux_ms() {
   echo "$best"
 }
 
+# row MS TEXT: print one report line, the number right-aligned.
 row() { printf '  %7s ms  %s\n' "$1" "$2"; }
 
 # ── Stage timings ─────────────────────────────────────────────────────────────
 
+# CONF: the tmux config being profiled. On the deployed box this is a symlink
+# into steves-cli-setup, so that is the config measured.
 CONF="$HOME/.tmux.conf"
 
+# Step 2: time the tmux server three ways, each on the private socket:
+#   T_BARE    the bare binary with -f /dev/null, so no config at all
+#   T_NOPLUG  your real config with every `run-shell` line stripped out
+#   T_CONF    your real config, untouched
+# Read it by subtracting. T_BARE is tmux itself. T_NOPLUG - T_BARE is the
+# cost of parsing your config. T_CONF - T_NOPLUG is the cost of loading your
+# plugins. No config file means all three are set to T_BARE.
 measure_tmux() {
   echo "tmux server startup"
 
@@ -88,16 +153,28 @@ measure_tmux() {
   fi
 
   # Plugins stripped: isolates config parsing from `run-shell` plugin loading.
+  # Only lines starting with `run-shell` are dropped; the short alias `run`
+  # (e.g. `run '~/.tmux/plugins/tpm/tpm'`) is kept and counts as parsing.
   grep -v '^[[:space:]]*run-shell' "$CONF" > "$TMPD/noplug.conf"
   T_NOPLUG=$(best_tmux_ms "$TMPD/noplug.conf")
   row "$T_NOPLUG" "+ config parsed, run-shell lines stripped"
 
+  # Restore is not in this number. Continuum refuses to auto-restore when
+  # another tmux server is already running: a guard so two servers can't
+  # fight over one save file. Your real server runs while we measure, so
+  # restore never fires here. (The note printed below says "measured", but
+  # step 5 actually computes it from the save file.)
   T_CONF=$(best_tmux_ms "$CONF")
   row "$T_CONF" "+ plugins loaded (full config)"
   echo "  note: auto-restore is skipped while another server runs, so the"
   echo "        figure above is plugin load only. Restore is measured below."
 }
 
+# Step 3: time your shell twice (best of 3 each). Once with -f, which skips
+# every rc file: the floor, the fastest your shell can start. Once normally:
+# T_SHELL. The gap is what your own config costs. This matters more than any
+# other number here, because EVERY PANE PAYS IT. SH is the shell's name
+# from $SHELL; only zsh and bash can be profiled, others set T_SHELL=0.
 measure_shell() {
   echo
   echo "interactive shell startup (one of these per pane)"
@@ -114,8 +191,12 @@ measure_shell() {
   row "$(( T_SHELL - floor ))" "= cost of your rc files"
 }
 
-# Attribute wall time to individual rc lines by diffing consecutive xtrace
-# timestamps. The delta after a line's trace belongs to that line.
+# Step 4: blame individual rc lines. Only runs if the shell took 250 ms or
+# more. It re-runs the shell with xtrace on (-x: print each line before it
+# runs) and a timestamp in the trace prompt (PS4). Then it subtracts each
+# timestamp from the next. The gap after a line belongs to that line. The
+# awk sums those gaps per file+command (command cut to 52 chars), and the
+# six worst are printed.
 trace_shell() {
   if [ "${T_SHELL:-0}" -lt 250 ]; then return 0; fi
   case "$SH" in
@@ -140,12 +221,23 @@ trace_shell() {
   ' "$TMPD/trace" | sort -rn | head -6 | sed 's/^/    /' || true
   # `|| true` is load-bearing: head closes the pipe, sort takes SIGPIPE, and
   # pipefail turns that into a non-zero pipeline that set -e would act on.
+  # Without it the script exits 141 and you never see the report. Same family
+  # as the AND-list trap in the repo's CLAUDE.md.
 }
 
 # ── Session restore ───────────────────────────────────────────────────────────
 
 # Panes multiply the shell cost, and the resurrect/continuum restore path has a
 # floor of hardcoded sleeps that no amount of tuning removes.
+# Step 5: read your last saved session. Find the save folder: the live
+# server's @resurrect-dir option first, then ~/.local/share/tmux/resurrect,
+# then ~/.tmux/resurrect. Take the newest tmux_resurrect_*.txt in it.
+#   N_PANES  lines whose first tab-separated field is "pane"
+#   N_AI     those panes that look like an AI assistant (claude, opencode,
+#            codex, a standalone "pi", grok)
+#   T_SLEEP  the literal `sleep` calls the restore scripts run one after
+#            another, added up
+# No folder or no save file means all three are 0.
 measure_restore() {
   echo
   echo "session restore"
@@ -170,6 +262,11 @@ measure_restore() {
   echo "  last save: $(basename "$last") — $N_PANES panes, $N_AI of them AI assistants"
 
   # Sum the literal `sleep N` calls the restore scripts run in series.
+  # These are counted, not timed: timing restore for real would mean killing
+  # your sessions. Constants from the vendored plugins (steves-cli-setup):
+  #   continuum_restore.sh present            1000 ms
+  #   restore-assistant-sessions.sh present,  2000 ms + 1300 ms per AI pane
+  #   and at least one AI pane
   T_SLEEP=0
   local v="$HOME/.local/share/steves-cli-setup/vendor"
   if [ -f "$v/tmux-continuum/scripts/continuum_restore.sh" ]; then
@@ -186,6 +283,28 @@ measure_restore() {
 
 # ── Report ────────────────────────────────────────────────────────────────────
 
+# Step 6: print a budget and ranked advice.
+# Budget = server+config+plugins + (shell cost x pane count, at least 1) +
+# restore sleeps. It is arithmetic, not a stopwatch: the right order of
+# magnitude, not a precise total. Programs inside panes (an editor loading
+# plugins, an AI assistant resuming a chat) are not counted and can each add
+# seconds; the report says so out loud.
+# Advice, biggest win first. Each item only shows when its number is big:
+#   1. Slow shell (T_SHELL >= 250 ms). Usual cause: a version manager (nvm,
+#      rbenv, pyenv, conda) that resolves a version on every shell start. Fix
+#      is lazy loading: put the default version's bin on PATH as a plain
+#      string, and define small functions that source the real init the
+#      first time you call one. Not a tmux fix: it also speeds up every new
+#      terminal, split and subshell. Put it in ~/.zshrc.local, not ~/.zshrc.
+#      On this box ~/.zshrc is a symlink into steves-cli-setup, so editing it
+#      edits a tracked file. That repo sources ~/.zshrc.local on purpose and
+#      never writes to it.
+#   2. Restore sleeps (T_SLEEP > 0). Constants in the vendored plugins. They
+#      let panes get ready before keys are sent; shortening them risks a
+#      restore that drops a command. Restoring fewer panes is safer.
+#   3. Plugin load (T_CONF - T_NOPLUG >= 300 ms). Each run-shell line is a
+#      synchronous script. Nothing to tune in a plugin you keep; drop one you
+#      don't use.
 report() {
   echo
   echo "─── estimated budget to a fully restored session ───"

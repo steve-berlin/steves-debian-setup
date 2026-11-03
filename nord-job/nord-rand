@@ -3,6 +3,11 @@
 # nord-rand — connect NordVPN to a random country (any country the
 # NordVPN client lists as available).
 #
+# The idea: a VPN sends your traffic through someone else's computer first,
+# so websites see that computer's location instead of yours. Always exiting
+# in the same country leaves one steady, recognisable trail. So this picks
+# a random country, connects, and logs it. A cron job runs it every 6 hours.
+#
 # Usage:
 #   nord-rand              connect to a random country; skip if already connected
 #   nord-rand force        connect to a random country, even if already connected
@@ -10,19 +15,72 @@
 #   nord-rand kill on|off  toggle the kill switch (off = plain internet allowed)
 #
 # Logs every action to ~/Desktop/nord-rand.log.
+#
+# Install:
+#   install -m 755 nord-job/nord-rand ~/.local/bin/
+#   crontab nord-job/nord-rand.cron
+# WARNING: `crontab <file>` REPLACES your whole crontab; it does not add to
+# it. Run `crontab -l` first and keep a copy if you have other jobs. And
+# `crontab -r` deletes ALL your cron jobs, not just this one.
+#
+# The cron line is:
+#   0 */6 * * * $HOME/.local/bin/nord-rand force >/dev/null 2>&1
+# The five fields are minute, hour, day-of-month, month, day-of-week. So:
+# minute 0 of every 6th hour, every day = 00:00, 06:00, 12:00, 18:00.
+#
+# Why cron runs `force`, not the plain command: plain nord-rand does nothing
+# if already connected ("don't yank a working connection out from under a
+# download"). But `setup` turns autoconnect on, so NordVPN reconnects by
+# itself and you are nearly always connected. Plain mode would then skip
+# every time and never rotate. `force` connects regardless. By hand, plain
+# nord-rand keeps the polite skip. Want skipping on the schedule too? Drop
+# the word `force` from the cron line.
+#
+# Before any of this works (the script does not do these for you):
+#   1. NordVPN installed and its service (nordvpnd) running —
+#      installers/setup_nordvpn.sh.
+#   2. Your user in the `nordvpn` group, with a logout/login since.
+#   3. `nordvpn login` run once, by hand. It opens a browser.
+#
+# Exit codes:
+#   0  connected, skipped because already connected, setup or kill done
+#   1  could not connect (empty country list, or 5 failed attempts); or a
+#      `nordvpn set` in setup failed (set -e)
+#   2  bad arguments
 
+# set -e: stop at the first command that fails.
+# set -u: treat a typo'd (unset) variable name as an error.
+# set -o pipefail: a pipe fails if any command in it fails, not just the last.
 set -euo pipefail
 
+# LOG: every action is appended here with a timestamp. Cron throws away
+# the script's output (>/dev/null 2>&1) and this box has no mail system,
+# so a failing cron run says nothing anywhere else. Check it with:
+#   tail ~/Desktop/nord-rand.log
+# Lines you might see:
+#   skip: already connected      plain mode, VPN already up — expected
+#   try 3/5: Iceland             a pick failed, it is retrying
+#   fail: 5 attempts exhausted   five failed picks in a row; exits 1
+#   fail: empty country list     the service is down, or you are not logged in
 LOG="${HOME}/Desktop/nord-rand.log"
+# MAX_TRIES: how many random picks to try before giving up.
 MAX_TRIES=5
 
+# log MSG: write "<ISO-8601 time>  MSG" to the log file and to stderr.
 log() { printf '%s  %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
 
+# connected: true if `nordvpn status` has a line starting "Status: Connected".
 connected() { nordvpn status 2>/dev/null | grep -q '^Status: Connected'; }
 
-# Pull the live country list from the NordVPN client. Strips ANSI colour
-# codes, separator dashes, and whitespace; tolerates either comma- or
-# whitespace-separated output across client versions.
+# Pull the live country list from the NordVPN client, fresh every run, so
+# new countries show up and retired ones stop being picked on their own.
+# The raw output is messy and differs between client versions. Step by step:
+#   sed  strips ANSI colour codes
+#   tr   turns runs of spaces, tabs, commas and \r into newlines
+#   awk  drops empty lines and separator lines made only of dashes
+# Result: one country per line. Names keep NordVPN's own spelling with
+# underscores (United_Kingdom), because `nordvpn connect` expects that.
+# To restrict the pool (say, EU only), filter inside this function.
 list_countries() {
   nordvpn countries 2>/dev/null \
     | sed -E 's/\x1b\[[0-9;]*[mK]//g' \
@@ -30,6 +88,13 @@ list_countries() {
     | awk 'NF && !/^-+$/ && !/^$/'
 }
 
+# connect_random: pick a random country and connect. If the pick fails
+# (e.g. unavailable), pick again, up to MAX_TRIES times in total. Picks are
+# independent, so the same country can come up twice. Returns 0 on the
+# first success, 1 if all tries fail or the list is empty. An empty list
+# almost always means the NordVPN service isn't running or you are not
+# logged in. `nordvpn connect` output goes into the log file too.
+# COUNTRIES: the scrubbed country list, one entry per country.
 connect_random() {
   local pick
   mapfile -t COUNTRIES < <(list_countries)
@@ -47,6 +112,16 @@ connect_random() {
   return 1
 }
 
+# cmd_setup: one-time config. Run it once, after `nordvpn login`. It
+# disconnects first (a failure there is ignored), then sets:
+#   technology NordLynx        the fast modern protocol (WireGuard-based)
+#   firewall on                lets NordVPN manage firewall rules
+#   killswitch on              no VPN, no internet — see cmd_kill below
+#   threatprotectionlite on    blocks ads/trackers/bad domains at DNS level
+#   analytics off              stop sending usage data to NordVPN
+#   autoconnect on             reconnect automatically, including at boot
+#   post-quantum on            tried; ignored if the client is too old
+# Any other `nordvpn set` that fails stops the script (set -e).
 cmd_setup() {
   nordvpn disconnect >/dev/null 2>&1 || true
   nordvpn set technology NordLynx
@@ -59,6 +134,15 @@ cmd_setup() {
   log "setup: NordLynx + firewall + killswitch + threat-protection + autoconnect ON; analytics OFF"
 }
 
+# cmd_kill on|off: turn the kill switch on or off. Anything else: exit 2.
+# The kill switch blocks ALL internet traffic whenever the VPN is not up.
+# That is the point: no accidental leak while reconnecting. But if the
+# NordVPN service dies, or fails to start after an update, the machine
+# has no internet at all, and nothing on screen says why. Two ways out:
+#   nord-rand kill off                 turn the kill switch off
+#   sudo systemctl restart nordvpnd    or restart the service
+# Remember these BEFORE you need them: looking them up needs the internet
+# you no longer have.
 cmd_kill() {
   case "${1:-}" in
     on)  nordvpn set killswitch on  >/dev/null; log "kill switch ON" ;;
@@ -67,6 +151,15 @@ cmd_kill() {
   esac
 }
 
+# Pick the mode from the first argument. No argument means "rotate".
+#   setup   cmd_setup
+#   kill    cmd_kill with the rest of the arguments
+#   force   connect_random, even when already connected. It does not
+#           disconnect first; `nordvpn connect` switches server directly.
+#   rotate  (or no argument) skip with exit 0 if already connected,
+#           else connect_random
+#   other   usage message, exit 2
+# If connect_random returns 1, set -e ends the script with exit 1.
 case "${1:-rotate}" in
   setup) cmd_setup ;;
   kill)  shift; cmd_kill "$@" ;;

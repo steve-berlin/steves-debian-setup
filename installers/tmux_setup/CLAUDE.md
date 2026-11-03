@@ -5,7 +5,7 @@
 ## `install-tmux-immortal.sh` — persist tmux sessions across reboots
 
 Drops `~/.tmux/plugins/{tpm,tmux-resurrect,tmux-continuum}`; `~/.tmux.conf` (only if absent); `~/.config/autostart/tmux-immortal.desktop` (detached `main` session at login). `--uninstall` nukes plugins + autostart, leaves `~/.tmux.conf` alone.
-- **Never overwrites an existing `~/.tmux.conf`** — prints the four lines to add. An earlier draft used a header marker to detect "we own this file", which broke when the marker was *appended* to a hand-rolled config: re-runs clobbered the prefix rebind.
+- **Never overwrites an existing `~/.tmux.conf`** — prints the five lines to add. An earlier draft used a header marker to detect "we own this file", which broke when the marker was *appended* to a hand-rolled config: re-runs clobbered the prefix rebind.
 - **Headless plugin install needs a live tmux server.** `tpm/bin/install_plugins` reads its path from `tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH` (tmux's global env, not bash). A throwaway `_tpm_init` session running `sleep 30` keeps a server alive.
 - **Autostart spawns `tmux new-session -d -s main`, not `start-server`** — a server with zero sessions exits immediately; `main` is a placeholder and continuum adds saved sessions on top at server start.
 - **Continuum saves every 15 min.** Faster = disk churn (resurrect's pane-content capture isn't free on big scrollback). First save lands ~15 min after first real use — don't reboot inside that window expecting state.
