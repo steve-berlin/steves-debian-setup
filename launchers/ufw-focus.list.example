@@ -1,0 +1,22 @@
+# ufw-focus allowlist. Copy to ~/.config/ufw-focus/allow.list and edit.
+#
+# One website per line. Blank lines and anything after # are ignored.
+# Write the bare name: `wikipedia.org`. A pasted URL also works; the
+# https:// and the /path part are stripped.
+#
+# Each name is also tried with `www.` in front, so `wikipedia.org` covers
+# `www.wikipedia.org` too. Other subdomains are NOT covered: the firewall
+# only sees numbers (IP addresses), not names, so `*.wikipedia.org` cannot
+# work. List each one you need, e.g. `en.wikipedia.org`, `upload.wikimedia.org`.
+#
+# Big sites load pieces from other names. If a page half-loads, open the
+# browser's dev tools (F12) -> Network tab, see which names fail, add them.
+#
+# After editing, run `ufw-focus` again to apply the new list.
+#
+# Examples (remove the # to use):
+# en.wikipedia.org
+# upload.wikimedia.org
+# github.com
+# api.anthropic.com      # Claude Code
+# claude.ai

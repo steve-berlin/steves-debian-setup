@@ -98,7 +98,7 @@ installers/                 utils.sh, check-setup.sh, install-anki.sh, install-l
   tmux_setup/               install-tmux-immortal.sh / -dim.sh / profile-tmux-startup.sh
   patches/                  vendored upstream patches (tmux dim)
 debloat_scripts/            debloat-mx.sh / -kde.sh / -nvidia.sh
-launchers/                  nic-boost
+launchers/                  nic-boost, ufw-focus (allowlist-only browsing via ufw)
 nord-job/                   nord-rand script + 6-hourly crontab snippet
 autostarts/                 *.desktop for ~/.config/autostart
 nvim-config/                vendored LazyVim starter (utils.sh seeds ~/.config/nvim from this)

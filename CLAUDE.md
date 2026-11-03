@@ -11,7 +11,7 @@ installers/       utils.sh check-setup.sh install-anki.sh install-ly.sh check-ly
   tmux_setup/     install-tmux-{immortal,dim}.sh                [nested CLAUDE.md]
   patches/        vendored upstream patches (tmux dim)
 debloat_scripts/  debloat-{mx,kde,nvidia}.sh                    [nested CLAUDE.md]
-launchers/        nic-boost
+launchers/        nic-boost  ufw-focus (+ ufw-focus.list.example)
 autostarts/       *.desktop for ~/.config/autostart
 nord-job/         nord-rand + nord-rand.cron (6-hourly NordVPN rotation)
 nvim-config/      vendored LazyVim starter (utils.sh seeds ~/.config/nvim)
@@ -28,7 +28,7 @@ Per-script gotchas live in the nested `CLAUDE.md` files marked above — Claude 
 3. `installers/setup_nordvpn.sh` — only if you want NordVPN.
 4. App installers (independent): `install-anki.sh`; `install-music-dl.sh`; `install-mx-frugal.sh` (only when *reinstalling the OS* with no USB stick); `install-ly.sh` (prompts before swapping default DM; verify with `check-ly.sh`); `fix-suspend-freeze.sh` (any systemd ≥ 256 laptop, not just Ly boxes); `debloat_scripts/debloat-{mx,nvidia,kde}.sh` (opt-in: KDE needs `plasma-desktop`, nvidia for Intel-iGPU-only boxes).
 5. Tmux: `tmux_setup/install-tmux-{immortal,dim}.sh`.
-6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`. Then `launchers/nic-boost` → `~/.local/bin/`, `autostarts/*.desktop` → `~/.config/autostart/`.
+6. NordVPN rotation: `install -m 755 nord-job/nord-rand ~/.local/bin/`; `crontab nord-job/nord-rand.cron`. Then `launchers/{nic-boost,ufw-focus}` → `~/.local/bin/` (and `ufw-focus.list.example` → `~/.config/ufw-focus/allow.list`), `autostarts/*.desktop` → `~/.config/autostart/`.
 Not on the install path: `fix-mount.sh` — run it when a mount fails.
 
 ## Conventions every installer follows
@@ -49,6 +49,15 @@ Live `~/.zshrc` (tokens — `backup.zshrc` is the stripped copy). Gaming partiti
 ### `nic-boost` — temporary WiFi/EEE perf boost
 
 Runtime-only NIC tweaks for bandwidth-heavy work. They cost battery *exactly when traffic is low* (they remove idle-time hardware napping), so they're opt-in per session: `sudo iw dev <wifi> set power_save off` (~0.3–0.5 W extra at idle); `sudo ethtool --set-eee <eth> eee off` (~0.5 W extra on an idle link). Three shapes: bare (apply, persist); `nic-boost <cmd>` (apply, run, revert on exit via `trap 'set_nic on' EXIT INT TERM` — covers Ctrl-C/kill); `--off` (revert, takes no command). Plus `--dry-run` and `--` (end of options). Appends `/usr/sbin:/sbin` to `PATH` — `iw` lives there, and before 2026-11-03 `command -v iw` failed for a normal user so the WiFi half silently never ran. Preflight hard-fails on missing `sudo`/`iw`/`ethtool` (each only if needed). No modprobe/dispatcher files written — a reboot reverts to driver defaults.
+
+### `ufw-focus` — website allowlist ("productivity mode")
+
+Flips ufw's outgoing default to deny and allows only the IPs of the sites in `~/.config/ufw-focus/allow.list` (or `--list FILE` / `$UFW_FOCUS_LIST`). Modes: bare (on, or refresh — re-resolves DNS, replaces rules), `--off`, `--status`, `--dry-run`. Revert design: every rule carries comment `ufw-focus`; `--off` deletes rules found by that tag in `ufw status numbered` (bottom-up, so numbers don't shift) and restores the pre-focus outgoing default + ufw active/inactive from `/var/lib/ufw-focus/state`, written only on the first enable (a refresh must not overwrite it). Last-resort manual undo: `sudo ufw default allow outgoing`.
+- Always allowed: DNS 53, DHCP 67/udp, NTP 123/udp, NordLynx 51820/udp, OpenVPN 1194, Tailscale 41641/udp, RFC1918 + 100.64/10, and `api.nordvpn.com` (nord-rand's 6-hourly reconnect). Dropping 51820 would kill the tunnel and the NordVPN kill switch would then cut everything.
+- IP-level only: no wildcards, CDN IPs drift (re-run to refresh), established connections survive (restart browser). Each name is also tried as `www.<name>`.
+- ufw output is localized (box is German) — all parsing goes through `LC_ALL=C`.
+- After enabling it curls a non-listed probe (`example.com`…); if that loads, another firewall (NordVPN's) accepts first and it warns. **Not yet run for real** — needs sudo; only `--dry-run` verified as of 2026-11-03.
+- Resolve loop: each `getent | awk` ends in `|| true` — under `set -e`+`pipefail` the first unresolvable name otherwise silently ended the loop.
 
 ## autostarts/
 

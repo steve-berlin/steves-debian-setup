@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# ufw-focus — productivity mode: the laptop can reach only the websites on
+# your list. Everything else is blocked until you turn it off.
+#
+# Words to know first:
+#   firewall  a filter in the kernel. Every network packet passes it, and a
+#             rule says "let through" or "drop".
+#   ufw       "uncomplicated firewall": Debian's easy front end for that
+#             filter. `sudo ufw allow ...` adds a rule.
+#   outgoing  packets your laptop sends out. Normally ufw lets all of them
+#             go and only filters what comes in. This script flips that:
+#             outgoing is denied unless a rule allows it.
+#   IP        the number a website really lives at. The firewall only sees
+#             numbers, never names. So the script asks DNS (the internet's
+#             phone book) for each site's numbers and allows those.
+#
+# How to use it:
+#   ufw-focus              turn on (or refresh, if already on)
+#   ufw-focus --off        turn off; put ufw back exactly as it was
+#   ufw-focus --status     on or off, and how many rules
+#   ufw-focus --dry-run    print every ufw command instead of running it
+#   ufw-focus --list FILE  use FILE instead of the default allowlist
+# The allowlist is ~/.config/ufw-focus/allow.list (template:
+# launchers/ufw-focus.list.example). Set UFW_FOCUS_LIST to point elsewhere.
+#
+# Why it is easy to undo:
+#   - Every rule it adds carries the comment "ufw-focus". --off deletes
+#     exactly those rules and nothing else.
+#   - Before the first change it writes down ufw's old state (was ufw on?
+#     what was the outgoing default?) in /var/lib/ufw-focus/state. --off
+#     puts both back.
+#   - Lost the script? `sudo ufw default allow outgoing` alone gets you
+#     back online. Leftover tagged rules then do nothing harmful.
+#
+# Limits worth knowing:
+#   - Sites move. Big sites sit behind CDNs (content delivery networks) that
+#     hand out different IPs over time. If an allowed site stops loading,
+#     run `ufw-focus` again: it re-asks DNS and replaces the rules.
+#   - Connections already open when you turn it on stay open (the firewall
+#     lets through replies to old connections). Restart the browser.
+#   - It is a speed bump, not a prison: you have sudo, so you can always
+#     turn it off. That is the point of "easy to revert".
+#
+# Exit codes: 0 done; 1 missing tool or empty allowlist; 2 bad argument.
+
+# Re-exec guard. This script uses bash-only syntax. Run as `sh ufw-focus`,
+# dash would read it and trip. BASH_VERSION is only set inside bash, so when
+# it is empty we restart the same script, with the same arguments, under bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
+
+# set -e: stop at the first command that fails.
+# set -u: treat a typo'd (unset) variable name as an error.
+# set -o pipefail: a pipe fails if any command in it fails, not just the last.
+set -euo pipefail
+
+# ufw lives in /usr/sbin, which a normal user's PATH often lacks.
+PATH=$PATH:/usr/sbin:/sbin
+
+# TAG: the comment stamped on every rule this script adds. --off finds its
+# own rules by this word, so it never touches rules you made by hand.
+TAG=ufw-focus
+
+# STATE: where ufw's "before" state is written down. Root-owned, because
+# only root can change ufw anyway, and so a stray user command can't fake it.
+STATE_DIR=/var/lib/ufw-focus
+STATE=$STATE_DIR/state
+
+# Always allowed while focus mode is on, whatever the list says. Without
+# these the machine itself breaks, not just the distracting sites:
+#   53         DNS. Without it no name can be turned into an IP at all.
+#   67/udp     DHCP: how the laptop gets its own address from the router.
+#   123/udp    NTP: clock sync. A wrong clock breaks every https site.
+#   51820/udp  NordLynx (WireGuard), the VPN tunnel itself. Blocking it
+#              drops the VPN, and NordVPN's kill switch then cuts everything.
+#   1194       OpenVPN, NordVPN's other technology.
+#   41641/udp  Tailscale's direct connections.
+ALWAYS_PORTS=(53 67/udp 123/udp 51820/udp 1194 41641/udp)
+
+# Local networks: router, printer, NAS, phones on the same WiFi, and
+# Tailscale's 100.64.0.0/10 range. None of these are websites.
+ALWAYS_NETS=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10)
+
+# Names the system itself needs. api.nordvpn.com: the NordVPN client asks it
+# for servers when it (re)connects, which nord-rand's cron does every 6 h.
+ALWAYS_DOMAINS=(api.nordvpn.com)
+
+# PROBES: sites used to test that blocking works. The first one that is not
+# on your list is tried after turning on; if it still loads, something else
+# lets traffic past ufw, and the script says so.
+PROBES=(example.com neverssl.com wikipedia.org)
+
+# mode: on (default), off or status. dry=1 prints commands instead of
+# running them. LIST: the allowlist file.
+mode=on dry=0
+LIST=${UFW_FOCUS_LIST:-${XDG_CONFIG_HOME:-$HOME/.config}/ufw-focus/allow.list}
+usage() { sed -n '/^# How to use it:/,/^# launchers/p' "$0" | sed 's/^# \{0,1\}//'; }
+while (( $# > 0 )); do
+  case $1 in
+    --off)     mode=off ;;
+    --status)  mode=status ;;
+    --dry-run) dry=1 ;;
+    --list)    [[ $# -ge 2 ]] || { echo "error: --list needs a file" >&2; exit 2; }
+               LIST=$2; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "error: unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# Preflight: hard-fail on anything missing, before touching the firewall.
+for c in ufw sudo getent awk; do
+  command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
+done
+
+# run: in dry-run, print "DRY  <command>"; otherwise run it. The DRY line
+# goes to stderr, because callers send ufw's chatty "Rule added" output on
+# stdout to /dev/null, and the plan must still show.
+# The helper name U is spelled out as "sudo ufw" so the plan reads plainly.
+run() {
+  if (( dry )); then local c="$*"; printf 'DRY  %s\n' "${c/#U /sudo ufw }" >&2
+  else "$@"; fi
+}
+
+# U: run ufw as root with English output. ufw is translated (this box is
+# German), and the script reads words like "active" and "ALLOW OUT", so the
+# language is pinned to C (plain English).
+U() { sudo env LC_ALL=C ufw "$@"; }
+
+# Q: a read-only ufw query. In a dry run without a cached sudo password it
+# gives up quietly (sudo -n = never prompt) instead of asking, so a dry run
+# never needs your password.
+Q() {
+  if (( dry )); then sudo -n env LC_ALL=C ufw "$@" 2>/dev/null || true
+  else U "$@"; fi
+}
+
+# has_state: true if the saved-state file exists. Same dry-run rule as Q.
+has_state() {
+  if (( dry )); then sudo -n test -f "$STATE" 2>/dev/null
+  else sudo test -f "$STATE"; fi
+}
+
+# tagged_numbers: the rule numbers of every rule carrying our TAG, biggest
+# first. `ufw status numbered` prints lines like
+#   [ 7] 140.82.121.4  ALLOW OUT  Anywhere  # ufw-focus
+# Deleting rule 7 renumbers everything after it, so we delete from the
+# bottom up: the numbers still waiting to be deleted never shift.
+tagged_numbers() {
+  Q status numbered | awk -v t="# $TAG" '
+    index($0, t) && match($0, /^\[ *[0-9]+\]/) {
+      n = substr($0, RSTART + 1, RLENGTH - 2); gsub(/ /, "", n); print n
+    }' | sort -rn
+}
+
+# sweep: delete every tagged rule. --force skips ufw's "Proceed? (y|n)".
+sweep() {
+  local n count=0
+  while read -r n; do
+    if [[ -z $n ]]; then continue; fi
+    run U --force delete "$n" >/dev/null
+    count=$((count + 1))
+  done < <(tagged_numbers)
+  echo "removed $count ufw-focus rule(s)"
+}
+
+# read_list: print the cleaned names from LIST, one per line. Strips
+# comments, spaces, a leading scheme (https://) and any /path, and lowercases.
+read_list() {
+  sed -E 's/#.*//; s/^[[:space:]]+//; s/[[:space:]]+$//; s#^[a-zA-Z]+://##; s#/.*##' "$LIST" \
+    | tr 'A-Z' 'a-z' | awk 'NF'
+}
+
+# resolve NAME...: print every IP DNS gives for each name, and for its www.
+# variant. getent asks the same resolver every program uses. Junk answers
+# (0.0.0.0, ::, loopback, used by ad blockers to "null" a name) are dropped.
+# IPv6 answers are kept only if ufw handles IPv6 (IPV6=yes in
+# /etc/default/ufw); otherwise ufw would refuse those rules.
+resolve() {
+  local v6=0 h
+  grep -qi '^IPV6=yes' /etc/default/ufw 2>/dev/null && v6=1
+  # Each lookup ends in `|| true`: a name that doesn't resolve makes getent
+  # fail, and with set -e + pipefail that would silently end the whole loop
+  # at the first unknown name, dropping every name after it.
+  for h in "$@"; do
+    getent ahosts "$h" 2>/dev/null | awk '{print $1}' || true
+    if [[ $h != www.* ]]; then
+      getent ahosts "www.$h" 2>/dev/null | awk '{print $1}' || true
+    fi
+  done | sort -u | awk -v v6="$v6" '
+    $0 == "0.0.0.0" || $0 == "::" || $0 ~ /^127\./ || $0 == "::1" { next }
+    /:/ && !v6 { next }
+    { print }'
+}
+
+# ── --status ─────────────────────────────────────────────────────────────────
+if [[ $mode == status ]]; then
+  n=$(tagged_numbers | awk 'END {print NR}')
+  if has_state; then echo "ufw-focus: ON ($n rules)"; else echo "ufw-focus: off"; fi
+  U status verbose | grep -E '^(Status|Default):'
+  exit 0
+fi
+
+# ── --off ────────────────────────────────────────────────────────────────────
+# Read the saved "before" state, delete our rules, restore the outgoing
+# default, and switch ufw off again if it was off before focus mode.
+# If the state file is missing (deleted by hand), fall back to the safe
+# answer: outgoing allowed, ufw left running.
+if [[ $mode == off ]]; then
+  prev_out=allow was_active=yes
+  if has_state; then
+    # The state file holds two lines, prev_out=... and was_active=... .
+    # It is parsed, not sourced, so its content can never run as code.
+    prev_out=$(sudo awk -F= '$1 == "prev_out" {print $2}' "$STATE")
+    was_active=$(sudo awk -F= '$1 == "was_active" {print $2}' "$STATE")
+  else
+    echo "note: no saved state — restoring outgoing=allow"
+  fi
+  case $prev_out in allow|deny|reject) ;; *) prev_out=allow ;; esac
+  sweep
+  run U default "$prev_out" outgoing >/dev/null
+  if [[ $was_active == no ]]; then run U --force disable >/dev/null; fi
+  run sudo rm -f "$STATE"
+  echo "ufw-focus off (outgoing=$prev_out, ufw $( [[ $was_active == no ]] && echo disabled || echo active ))"
+  exit 0
+fi
+
+# ── on (default) ─────────────────────────────────────────────────────────────
+# Step 1: read the list. An empty list would block the whole internet, which
+# is never what you meant, so it refuses.
+[[ -f $LIST ]] || {
+  echo "error: no allowlist at $LIST" >&2
+  echo "       start from: launchers/ufw-focus.list.example" >&2
+  exit 1
+}
+mapfile -t names < <(read_list)
+(( ${#names[@]} )) || { echo "error: $LIST lists no sites" >&2; exit 1; }
+
+# Step 2: turn every name into IPs. A name DNS doesn't know is reported but
+# doesn't stop the run.
+mapfile -t ips < <(resolve "${names[@]}" "${ALWAYS_DOMAINS[@]}")
+for d in "${names[@]}"; do
+  getent ahosts "$d" >/dev/null 2>&1 || echo "warn: $d does not resolve — skipped" >&2
+done
+(( ${#ips[@]} )) || { echo "error: none of the sites resolved (offline?)" >&2; exit 1; }
+
+# Step 3: write down ufw's current state, but only the first time. On a
+# refresh (focus mode already on) the file already holds the real "before"
+# state; overwriting it with the focus-mode state would make --off useless.
+if ! has_state; then
+  status=$(Q status verbose)
+  prev_out=$(sed -nE 's/.*\b(allow|deny|reject) \(outgoing\).*/\1/p' <<<"$status")
+  was_active=no
+  if grep -q '^Status: active' <<<"$status"; then was_active=yes; fi
+  : "${prev_out:=allow}"
+  run sudo install -d -m 755 "$STATE_DIR"
+  if (( dry )); then
+    echo "DRY  save prev_out=$prev_out was_active=$was_active to $STATE"
+  else
+    printf 'prev_out=%s\nwas_active=%s\n' "$prev_out" "$was_active" | sudo tee "$STATE" >/dev/null
+  fi
+fi
+
+# Step 4: drop old focus rules (from a previous run), then add fresh ones.
+# This is what makes a re-run a refresh: stale IPs go, new IPs come.
+sweep
+for p in "${ALWAYS_PORTS[@]}"; do run U allow out "$p" comment "$TAG" >/dev/null; done
+for n in "${ALWAYS_NETS[@]}"; do run U allow out to "$n" comment "$TAG" >/dev/null; done
+for ip in "${ips[@]}"; do run U allow out to "$ip" comment "$TAG" >/dev/null; done
+
+# Step 5: flip the outgoing default to deny, and make sure ufw is running.
+# Order matters: the allow rules are in place before the deny takes effect,
+# so the allowed sites never blink out.
+run U default deny outgoing >/dev/null
+run U --force enable >/dev/null
+echo "ufw-focus on: ${#names[@]} site(s), ${#ips[@]} IP(s) allowed"
+
+# Step 6: prove it. Fetch one site that is NOT on the list; it must fail.
+# If it loads, another firewall accepts the traffic before ufw sees it
+# (NordVPN's own rules are the usual suspect), and focus mode is not
+# actually blocking anything.
+if (( ! dry )) && command -v curl >/dev/null; then
+  for p in "${PROBES[@]}"; do
+    if printf '%s\n' "${names[@]}" | grep -qx "$p"; then continue; fi
+    if curl -s -m 6 -o /dev/null "https://$p"; then
+      echo "WARNING: $p still loads — something lets traffic past ufw" >&2
+    else
+      echo "check: $p blocked ✓"
+    fi
+    break
+  done
+  if curl -s -m 8 -o /dev/null "https://${names[0]}"; then
+    echo "check: ${names[0]} reachable ✓"
+  else
+    echo "warn: ${names[0]} did not load — it may need extra names (see the list file)" >&2
+  fi
+fi
+echo "Restart the browser to drop connections opened before. Undo: ufw-focus --off"
