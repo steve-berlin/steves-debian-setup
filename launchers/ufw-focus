@@ -75,16 +75,39 @@ STATE=$STATE_DIR/state
 #   51820/udp  NordLynx (WireGuard), the VPN tunnel itself. Blocking it
 #              drops the VPN, and NordVPN's kill switch then cuts everything.
 #   1194       OpenVPN, NordVPN's other technology.
-#   41641/udp  Tailscale's direct connections.
-ALWAYS_PORTS=(53 67/udp 123/udp 51820/udp 1194 41641/udp)
+ALWAYS_PORTS=(53 67/udp 123/udp 51820/udp 1194)
 
-# Local networks: router, printer, NAS, phones on the same WiFi, and
-# Tailscale's 100.64.0.0/10 range. None of these are websites.
-ALWAYS_NETS=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10)
+# Local networks: router, printer, NAS, phones on the same WiFi. None of
+# these are websites.
+ALWAYS_NETS=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16)
 
 # Names the system itself needs. api.nordvpn.com: the NordVPN client asks it
 # for servers when it (re)connects, which nord-rand's cron does every 6 h.
 ALWAYS_DOMAINS=(api.nordvpn.com)
+
+# Tailscale, so your tailnet projects stay reachable. Skipped if tailscale
+# isn't installed. Four separate things must get through:
+#   TS_NETS     the addresses your projects live at. 100.64.0.0/10 is the
+#               tailnet's IPv4 range. 192.200.0.0/24 is Tailscale's own control
+#               servers (owner checked in RDAP, 2026-11-05). They answer DNS
+#               with a changing handful of that block, so allowing only today's
+#               answers would break a later reconnect.
+#   TS_NET6     the tailnet's IPv6 range. Added only if ufw handles IPv6.
+#   TS_DOMAINS  the control servers by name, in case the block above ever moves.
+#   TS_PORT     tailscaled's own UDP port, for direct links to other machines.
+# There is deliberately no "allow everything on tailscale0" rule. With an exit
+# node, all web traffic goes through tailscale0, and that rule would let every
+# blocked site through.
+TS_NETS=(100.64.0.0/10 192.200.0.0/24)
+TS_NET6=fd7a:115c:a1e0::/48
+TS_DOMAINS=(controlplane.tailscale.com login.tailscale.com log.tailscale.com)
+TS_PORT=41641
+
+# Relays (DERP): when two machines can't connect directly, traffic goes through
+# one of Tailscale's relay servers. DERP_URL lists them all, with their IPs.
+# DERP_CACHE keeps the last good copy, in case the fetch fails.
+DERP_URL=https://login.tailscale.com/derpmap/default
+DERP_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/ufw-focus/derp.json
 
 # PROBES: sites used to test that blocking works. The first one that is not
 # on your list is tried after turning on; if it still loads, something else
@@ -194,6 +217,32 @@ resolve() {
     { print }'
 }
 
+# derp_ips: print the IPv4 address of every Tailscale relay. Fetches the list,
+# saves it to DERP_CACHE (not in a dry run, which must change nothing), and
+# falls back to the saved copy if the fetch fails. With neither, it warns and
+# prints nothing: direct links can still work without relays.
+# IPv4 only: one rule per relay is already about 90 rules. This costs nothing
+# on a network without public IPv6, and tailscaled falls back to IPv4 anyway.
+# The grep keeps only real IPv4 addresses, so odd data never reaches ufw.
+derp_ips() {
+  local map
+  map=$(curl -fsS -m 10 "$DERP_URL" 2>/dev/null) || map=
+  if jq -e .Regions >/dev/null 2>&1 <<<"$map"; then
+    if (( ! dry )); then
+      mkdir -p "${DERP_CACHE%/*}"
+      printf '%s\n' "$map" >"$DERP_CACHE"
+    fi
+  elif [[ -f $DERP_CACHE ]]; then
+    echo "warn: can't fetch Tailscale relay list — using saved copy" >&2
+    map=$(<"$DERP_CACHE")
+  else
+    echo "warn: can't fetch Tailscale relay list — relays stay blocked" >&2
+    return 0
+  fi
+  jq -r '.Regions[].Nodes[].IPv4 // empty' <<<"$map" \
+    | grep -E '^[0-9]+(\.[0-9]+){3}$' | sort -u || true
+}
+
 # ── --status ─────────────────────────────────────────────────────────────────
 if [[ $mode == status ]]; then
   n=$(tagged_numbers | awk 'END {print NR}')
@@ -245,6 +294,20 @@ for d in "${names[@]}"; do
 done
 (( ${#ips[@]} )) || { echo "error: none of the sites resolved (offline?)" >&2; exit 1; }
 
+# Tailscale's addresses are collected here, apart from your sites, so the count
+# printed at the end still means "your sites". jq reads the relay list. Without
+# jq the relays stay blocked, which is a warning: direct links can still work.
+ts=0 ts_ips=()
+if command -v tailscale >/dev/null; then
+  ts=1
+  mapfile -t ts_ips < <(resolve "${TS_DOMAINS[@]}")
+  if command -v jq >/dev/null && command -v curl >/dev/null; then
+    mapfile -t -O "${#ts_ips[@]}" ts_ips < <(derp_ips)
+  else
+    echo "warn: jq or curl missing — Tailscale relays stay blocked" >&2
+  fi
+fi
+
 # Step 3: write down ufw's current state, but only the first time. On a
 # refresh (focus mode already on) the file already holds the real "before"
 # state; overwriting it with the focus-mode state would make --off useless.
@@ -268,6 +331,20 @@ sweep
 for p in "${ALWAYS_PORTS[@]}"; do run U allow out "$p" comment "$TAG" >/dev/null; done
 for n in "${ALWAYS_NETS[@]}"; do run U allow out to "$n" comment "$TAG" >/dev/null; done
 for ip in "${ips[@]}"; do run U allow out to "$ip" comment "$TAG" >/dev/null; done
+
+# Tailscale's rules. ufw reloads after each rule, so this can take a minute.
+# The direct-link rule matches the port packets leave FROM, not the port they
+# go to. tailscaled always sends from TS_PORT, but a machine behind a home
+# router answers on some random port, so a "to port 41641" rule would miss it.
+if (( ts )); then
+  echo "adding Tailscale rules (${#ts_ips[@]} servers) — this can take a minute"
+  run U allow out proto udp from any port "$TS_PORT" to any comment "$TAG" >/dev/null
+  for n in "${TS_NETS[@]}"; do run U allow out to "$n" comment "$TAG" >/dev/null; done
+  if grep -qi '^IPV6=yes' /etc/default/ufw 2>/dev/null; then
+    run U allow out to "$TS_NET6" comment "$TAG" >/dev/null
+  fi
+  for ip in "${ts_ips[@]}"; do run U allow out to "$ip" comment "$TAG" >/dev/null; done
+fi
 
 # Step 5: flip the outgoing default to deny, and make sure ufw is running.
 # Order matters: the allow rules are in place before the deny takes effect,
